@@ -77,7 +77,9 @@ export default function HistoryPage() {
                   {formatDate(session.created_at)}
                 </td>
                 <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
-                  {session.session_code}
+                <a href={`/history/${session.id}`}>
+  {session.session_code}
+</a>
                 </td>
                 <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
                   {session.location}
