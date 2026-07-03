@@ -162,6 +162,90 @@ const winnerAccuracy =
         accuracy: playerAccuracy,
       };
     });
+
+    const mostAccuratePlayer = [...playerStats]
+    .filter((player) => player.totalAnswers > 0)
+    .sort((a, b) => Number(b.accuracy) - Number(a.accuracy))[0];
+  
+  const categoryStats = history.map((question) => {
+    const questionAnswers = answers.filter(
+      (answer) => answer.question_id === question.question_id
+    );
+  
+    const correctCount = questionAnswers.filter(
+      (answer) => answer.is_correct
+    ).length;
+  
+    const accuracy =
+      questionAnswers.length === 0
+        ? 0
+        : ((correctCount / questionAnswers.length) * 100).toFixed(1);
+  
+    return {
+      category: question.category || "Unknown",
+      subcategory: question.subcategory || "",
+      totalAnswers: questionAnswers.length,
+      correctAnswers: correctCount,
+      accuracy,
+    };
+  });
+  
+  const categorySummary = categoryStats.reduce((acc: any[], item) => {
+    const existing = acc.find(
+      (category) =>
+        category.category === item.category &&
+        category.subcategory === item.subcategory
+    );
+  
+    if (existing) {
+      existing.totalAnswers += item.totalAnswers;
+      existing.correctAnswers += item.correctAnswers;
+    } else {
+      acc.push({
+        category: item.category,
+        subcategory: item.subcategory,
+        totalAnswers: item.totalAnswers,
+        correctAnswers: item.correctAnswers,
+      });
+    }
+  
+    return acc;
+  }, []);
+  
+  const categorySummaryWithAccuracy = categorySummary.map((category) => ({
+    ...category,
+    accuracy:
+      category.totalAnswers === 0
+        ? 0
+        : ((category.correctAnswers / category.totalAnswers) * 100).toFixed(1),
+  }));
+  
+  const hardestQuestions = history
+    .map((question) => {
+      const questionAnswers = answers.filter(
+        (answer) => answer.question_id === question.question_id
+      );
+  
+      const correctCount = questionAnswers.filter(
+        (answer) => answer.is_correct
+      ).length;
+  
+      const accuracy =
+        questionAnswers.length === 0
+          ? 0
+          : ((correctCount / questionAnswers.length) * 100).toFixed(1);
+  
+      return {
+        ...question,
+        totalAnswers: questionAnswers.length,
+        correctAnswers: correctCount,
+        accuracy,
+      };
+    })
+    .filter((question) => question.totalAnswers > 0)
+    .sort((a, b) => Number(a.accuracy) - Number(b.accuracy))
+    .slice(0, 5);
+    
 const accuracy =
   totalAnswers === 0
     ? 0
@@ -317,6 +401,149 @@ const accuracy =
           <p>
   <strong>Accuracy:</strong> {accuracy}%
 </p>
+
+<h2 style={{ marginTop: "2rem" }}>Archive Stats</h2>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "1rem",
+  }}
+>
+  <div
+    style={{
+      border: "1px solid #ccc",
+      borderRadius: "10px",
+      padding: "1rem",
+      background: "#fafafa",
+    }}
+  >
+    <h3 style={{ marginTop: 0 }}>Most Accurate Player</h3>
+    {mostAccuratePlayer ? (
+      <>
+        <p>
+          <strong>{mostAccuratePlayer.display_name}</strong>
+        </p>
+        <p>
+          <strong>Accuracy:</strong> {mostAccuratePlayer.accuracy}%
+        </p>
+        <p>
+          <strong>Correct:</strong> {mostAccuratePlayer.correctAnswers} /{" "}
+          {mostAccuratePlayer.totalAnswers}
+        </p>
+      </>
+    ) : (
+      <p>No player accuracy data yet.</p>
+    )}
+  </div>
+
+  <div
+    style={{
+      border: "1px solid #ccc",
+      borderRadius: "10px",
+      padding: "1rem",
+      background: "#fafafa",
+    }}
+  >
+    <h3 style={{ marginTop: 0 }}>Session Difficulty</h3>
+    <p>
+      <strong>Overall Accuracy:</strong> {accuracy}%
+    </p>
+    <p>
+      <strong>Correct Answers:</strong> {correctAnswers} / {totalAnswers}
+    </p>
+  </div>
+</div>
+
+<h3 style={{ marginTop: "2rem" }}>Category Stats</h3>
+
+{categorySummaryWithAccuracy.length === 0 ? (
+  <p>No category stats found.</p>
+) : (
+  <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    <thead>
+      <tr>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Category
+        </th>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Correct
+        </th>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Total
+        </th>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Accuracy
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {categorySummaryWithAccuracy.map((category) => (
+        <tr key={`${category.category}-${category.subcategory}`}>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {category.category}
+            {category.subcategory ? ` → ${category.subcategory}` : ""}
+          </td>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {category.correctAnswers}
+          </td>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {category.totalAnswers}
+          </td>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {category.accuracy}%
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
+
+<h3 style={{ marginTop: "2rem" }}>Hardest Questions</h3>
+
+{hardestQuestions.length === 0 ? (
+  <p>No hardest question data found.</p>
+) : (
+  <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    <thead>
+      <tr>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Question
+        </th>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Correct
+        </th>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Total
+        </th>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: "0.5rem" }}>
+          Accuracy
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {hardestQuestions.map((question) => (
+        <tr key={question.id}>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {question.question_text || "Unknown question"}
+            <br />
+            <small>{question.question_id}</small>
+          </td>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {question.correctAnswers}
+          </td>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {question.totalAnswers}
+          </td>
+          <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+            {question.accuracy}%
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
 
 <h2 style={{ marginTop: "2rem" }}>Player Performance</h2>
 
