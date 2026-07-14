@@ -102,13 +102,18 @@ export async function POST(request: Request) {
     const question = eligibleQuestions[randomIndex];
 
     const { error: historyError } = await supabase
-      .from("question_history")
-      .insert({
-        question_id: question.question_id,
-        session_id: sessionId,
-        game_mode: "main",
-        date_used: new Date().toISOString(),
-      });
+  .from("question_history")
+  .insert({
+    question_id: question.question_id,
+    session_id: sessionId,
+    game_mode: "main",
+    date_used: new Date().toISOString(),
+    question_text: question.question_text,
+    category: question.category,
+    subcategory: question.subcategory,
+    difficulty: question.difficulty,
+    correct_answer: question.answer,
+  });
 
     if (historyError) {
       return NextResponse.json(
