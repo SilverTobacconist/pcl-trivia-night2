@@ -49,6 +49,14 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
     setPlayers([]);
     setAnswers([]);
     setSelectedAnswers([]);
+    setRickhouseGame(null);
+    setRickhousePours([]);
+    setRickhouseAnswers([]);
+    setSelectedRickhouseAnswers([]);
+    setActiveRickhousePour(null);
+    setRickhouseScores([]);
+    setProposedNextPicker(null);
+    setCaskStrengthEntries([]);
 
     const response = await fetch("/api/sessions", {
       method: "POST",
@@ -67,6 +75,7 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
     setSession(data.session);
     updateTimer(data.session);
     setLookupCode(data.session.session_code);
+    await loadRickhouseGame(data.session.id);
   }
 
   async function loadSession() {
@@ -76,6 +85,14 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
     setPlayers([]);
     setAnswers([]);
     setSelectedAnswers([]);
+    setRickhouseGame(null);
+    setRickhousePours([]);
+    setRickhouseAnswers([]);
+    setSelectedRickhouseAnswers([]);
+    setActiveRickhousePour(null);
+    setRickhouseScores([]);
+    setProposedNextPicker(null);
+    setCaskStrengthEntries([]);
 
     try {
       const response = await fetch(
@@ -90,6 +107,7 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
       }
 
       setSession(data.session);
+      await loadRickhouseGame(data.session.id);
 
       if (data.session.current_question_id) {
         setCurrentQuestion({
@@ -257,16 +275,26 @@ setSelectedRickhouseAnswers(
     setRickhouseScores(data.scores);
   }
 
-  async function loadRickhouseGame() {
-    if (!session?.id) return;
+  async function loadRickhouseGame(sessionIdOverride?: string) {
+    const activeSessionId = sessionIdOverride || session?.id;
+    if (!activeSessionId) return;
   
     const response = await fetch(
-      `/api/rickhouse/current?sessionId=${session.id}`
+      `/api/rickhouse/current?sessionId=${activeSessionId}`
     );
   
     const data = await response.json();
   
     if (!response.ok) {
+      setRickhouseGame(null);
+      setRickhousePours([]);
+      setRickhouseAnswers([]);
+      setSelectedRickhouseAnswers([]);
+      setActiveRickhousePour(null);
+      setRickhouseScores([]);
+      setProposedNextPicker(null);
+      setRickhouseRoundSecondsRemaining(null);
+      setCaskStrengthEntries([]);
       return;
     }
   
@@ -276,6 +304,7 @@ setSelectedRickhouseAnswers(
     setProposedNextPicker(data.proposedNextPicker || null);
     setRickhouseRoundSecondsRemaining(data.roundSecondsRemaining ?? null);
     setCaskStrengthEntries(data.caskStrength || []);
+    setActiveRickhousePour(data.activePour || null);
 
     if (
       data.game?.game_phase === "round_intermission" &&
@@ -367,8 +396,6 @@ setSelectedAnswers([]);
   
     setRickhouseAnswers([]);
 setSelectedRickhouseAnswers([]);
-setActiveRickhousePour(null);
-
 await loadRickhouseGame();
 await loadRickhouseScores(rickhouseGame.id);
 await loadSession();
@@ -784,6 +811,7 @@ await loadSession();
   Refresh Players
 </button>
 
+{!rickhouseGame && session.status === "active" && (
 <button
   onClick={startRickhouseTrivia}
   style={{
@@ -798,6 +826,7 @@ await loadSession();
 >
   Start Rickhouse Trivia
 </button>
+)}
 
 <button onClick={loadAnswers} style={{ background: "#444", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
   Load Answers
@@ -865,6 +894,14 @@ await loadSession();
     setCurrentQuestion(null);
     setAnswers([]);
     setSelectedAnswers([]);
+    setRickhouseGame(null);
+    setRickhousePours([]);
+    setRickhouseAnswers([]);
+    setSelectedRickhouseAnswers([]);
+    setActiveRickhousePour(null);
+    setRickhouseScores([]);
+    setProposedNextPicker(null);
+    setCaskStrengthEntries([]);
   }}
   style={{ background: "#777", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer" }}
 >
@@ -918,7 +955,7 @@ await loadSession();
     <p>
       <strong>Status:</strong> {rickhouseGame.status}
     </p>
-{["pour_question", "angels_question"].includes(rickhouseGame.game_phase) && (
+{["question", "angels_question"].includes(rickhouseGame.game_phase) && (
   <>
     <button
       type="button"

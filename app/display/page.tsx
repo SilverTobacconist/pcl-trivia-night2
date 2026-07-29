@@ -30,12 +30,16 @@ export default function DisplayPage() {
       localStorage.setItem("pcl_display_session_code",s.session_code);
       const scoreResponse=await fetch(`/api/scoreboard?sessionId=${s.id}`);
       const scoreData=await scoreResponse.json(); if(scoreResponse.ok)setScoreboard(scoreData.players||[]);
-      const rhResponse=await fetch(`/api/rickhouse/current?sessionId=${s.id}`);
+      const rhResponse=await fetch(`/api/rickhouse/current?sessionId=${s.id}&t=${Date.now()}`, { cache: "no-store" });
       if (rhResponse.ok) {
         const rhData=await rhResponse.json();
         setRickhouse(rhData);
       } else {
         setRickhouse(null);
+        if (s.game_mode === "rickhouse") {
+          const rhError = await rhResponse.json().catch(() => ({}));
+          setError(rhError.error || "Rickhouse is active, but the display could not load its game state.");
+        }
       }
     }catch(e:any){setError(e.message||"Could not load display.");}
     finally{setLoading(false);}
