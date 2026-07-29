@@ -1075,14 +1075,22 @@ await loadSession();
     {rickhouseGame.game_phase !== "cask_strength_wager" && <p><strong>Question:</strong> {rickhouseGame.cask_strength_question_text}</p>}
     {rickhouseGame.game_phase === "cask_strength_grading" && <>
       <p><strong>Correct answer:</strong> {rickhouseGame.cask_strength_correct_answer}</p>
-      <button type="button" onClick={loadCaskStrengthEntries}>Load Cask Strength Answers</button>
+      <button type="button" onClick={loadCaskStrengthEntries} style={{
+        background: "#5b3511",
+        color: "#ffffff",
+        padding: "0.7rem 1rem",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontWeight: "bold",
+      }}>Load Cask Strength Answers</button>
       <div style={{marginTop:"1rem"}}>{caskStrengthEntries.map((entry)=><label key={entry.id} style={{display:"block",padding:"0.4rem"}}><input type="checkbox" checked={selectedCaskCorrectIds.includes(entry.id)} onChange={()=>setSelectedCaskCorrectIds(current=>current.includes(entry.id)?current.filter(id=>id!==entry.id):[...current,entry.id])}/> {entry.player_name}: {entry.submitted_answer || "No answer"} (Wager submitted)</label>)}</div>
-      <button type="button" onClick={gradeCaskStrength} style={{marginTop:"0.75rem"}}>Grade Cask Strength</button>
+      <button type="button" onClick={gradeCaskStrength} style={{marginTop:"0.75rem",background:"#5b3511",color:"#ffffff",padding:"0.7rem 1rem",border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"bold"}}>Grade Cask Strength</button>
     </>}
     {rickhouseGame.game_phase === "cask_strength_reveal" && <>
       <ol>{caskStrengthEntries.map((entry)=><li key={entry.id}>{entry.player_name} — {entry.is_revealed ? `${entry.is_correct ? "Correct" : "Incorrect"}, wager ${entry.wager}, score ${entry.final_score}` : `${entry.starting_score} pts — waiting`}</li>)}</ol>
-      <button type="button" onClick={revealNextCaskStrength}>Reveal Next Player</button>
-      {caskStrengthEntries.length>0 && caskStrengthEntries.every((entry)=>entry.is_revealed) && <button type="button" onClick={finalizeCaskStrength} style={{marginLeft:"0.5rem"}}>Finalize Rickhouse & Award Session Points</button>}
+      <button type="button" onClick={revealNextCaskStrength} style={{background:"#5b3511",color:"#ffffff",padding:"0.7rem 1rem",border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"bold"}}>Reveal Next Player</button>
+      {caskStrengthEntries.length>0 && caskStrengthEntries.every((entry)=>entry.is_revealed) && <button type="button" onClick={finalizeCaskStrength} style={{marginLeft:"0.5rem",background:"#5b3511",color:"#ffffff",padding:"0.7rem 1rem",border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"bold"}}>Finalize Rickhouse & Award Session Points</button>}
     </>}
     {rickhouseGame.game_phase === "cask_strength_complete" && <p><strong>Rickhouse complete. Session points have been awarded.</strong></p>}
   </section>
