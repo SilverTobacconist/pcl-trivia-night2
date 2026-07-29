@@ -469,13 +469,14 @@ const response = await fetch(submitEndpoint, {
 
 {rickhouseGame?.game_phase === "round_intermission" && (
   <section
-    style={{
-      marginTop: "2rem",
-      padding: "1.25rem",
-      border: "2px solid #8a5a00",
-      borderRadius: "8px",
-      background: "#fff8dc",
-    }}
+  style={{
+    marginTop: "2rem",
+    padding: "1.25rem",
+    border: "2px solid #8a5a00",
+    borderRadius: "8px",
+    background: "#fff8dc",
+    color: "#111111",
+  }}
   >
     {rickhouseGame.round_name === "single_cask" ? (
       <>
