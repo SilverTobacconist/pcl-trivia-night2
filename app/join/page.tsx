@@ -47,10 +47,16 @@ window.location.href = `/play?sessionId=${data.session.id}&playerId=${data.playe
         <label>
           Session Code:{" "}
           <input
-            value={sessionCode}
-            onChange={(event) => setSessionCode(event.target.value)}
-            style={{ padding: "0.5rem" }}
-          />
+  value={sessionCode}
+  onChange={(event) => setSessionCode(event.target.value)}
+  style={{
+    padding: "0.5rem",
+    background: "#ffffff",
+    color: "#111111",
+    border: "1px solid #999999",
+    borderRadius: "4px",
+  }}
+/>
         </label>
       </div>
 
@@ -58,10 +64,16 @@ window.location.href = `/play?sessionId=${data.session.id}&playerId=${data.playe
         <label>
           Display Name:{" "}
           <input
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            style={{ padding: "0.5rem" }}
-          />
+  value={displayName}
+  onChange={(event) => setDisplayName(event.target.value)}
+  style={{
+    padding: "0.5rem",
+    background: "#ffffff",
+    color: "#111111",
+    border: "1px solid #999999",
+    borderRadius: "4px",
+  }}
+/>
         </label>
       </div>
 

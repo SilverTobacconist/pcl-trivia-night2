@@ -632,21 +632,25 @@ const response = await fetch(submitEndpoint, {
               </div>
 
               <textarea
-                value={answerText}
-                onChange={(event) => {
-                  setAnswerText(event.target.value);
-                  answerTextRef.current = event.target.value;
-                }}
-                disabled={submitted || submitting || secondsRemaining === 0}
-                placeholder="Type your answer..."
-                style={{
-                  width: "100%",
-                  minHeight: "90px",
-                  padding: "0.75rem",
-                  fontSize: "1rem",
-                  marginBottom: "1rem",
-                }}
-              />
+  value={answerText}
+  onChange={(event) => {
+    setAnswerText(event.target.value);
+    answerTextRef.current = event.target.value;
+  }}
+  disabled={submitted || submitting || secondsRemaining === 0}
+  placeholder="Type your answer..."
+  style={{
+    width: "100%",
+    minHeight: "90px",
+    padding: "0.75rem",
+    fontSize: "1rem",
+    marginBottom: "1rem",
+    background: "#ffffff",
+    color: "#111111",
+    border: "1px solid #999999",
+    borderRadius: "4px",
+  }}
+/>
 
               <button
                 type="button"
