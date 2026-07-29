@@ -30,10 +30,13 @@ export default function DisplayPage() {
       localStorage.setItem("pcl_display_session_code",s.session_code);
       const scoreResponse=await fetch(`/api/scoreboard?sessionId=${s.id}`);
       const scoreData=await scoreResponse.json(); if(scoreResponse.ok)setScoreboard(scoreData.players||[]);
-      if(s.game_mode==="rickhouse"){
-        const rhResponse=await fetch(`/api/rickhouse/current?sessionId=${s.id}`);
-        const rhData=await rhResponse.json(); setRickhouse(rhResponse.ok?rhData:null);
-      } else setRickhouse(null);
+      const rhResponse=await fetch(`/api/rickhouse/current?sessionId=${s.id}`);
+      if (rhResponse.ok) {
+        const rhData=await rhResponse.json();
+        setRickhouse(rhData);
+      } else {
+        setRickhouse(null);
+      }
     }catch(e:any){setError(e.message||"Could not load display.");}
     finally{setLoading(false);}
   }
@@ -61,7 +64,7 @@ export default function DisplayPage() {
     {(!session||selector)?<section style={{...panel,maxWidth:"820px",margin:"8vh auto"}}><h1 style={{fontSize:"clamp(2rem,6vw,4rem)"}}>PCL Trivia Night</h1><p>Enter the active session code.</p><div style={{display:"flex",justifyContent:"center",gap:"0.75rem",flexWrap:"wrap"}}><input value={sessionCode} onChange={e=>setSessionCode(e.target.value)} placeholder="Session code" style={{padding:"0.9rem",fontSize:"1.5rem",borderRadius:"10px",background:"#fff",color:"#111",border:"2px solid rgba(255,255,255,.4)",minWidth:"260px"}}/><button onClick={()=>void loadSession()} disabled={loading} style={{background:"#c28a2e",color:"white",padding:"0.95rem 1.35rem",border:0,borderRadius:"10px",fontWeight:800}}>{loading?"Loading...":"Load Display"}</button></div>{error&&<p style={{color:"#ff9a9a"}}>Error: {error}</p>}</section>:
     <><button onClick={()=>{localStorage.removeItem("pcl_display_session_code");setSelector(true);setSession(null);}} style={{position:"absolute",right:"1rem",top:"1rem",background:"rgba(255,255,255,.12)",color:"white",border:"1px solid #777",borderRadius:"8px",padding:"0.45rem 0.8rem"}}>Change Session</button>
       <header style={{marginBottom:"1rem"}}><h1 style={{margin:"0",fontSize:"clamp(1.8rem,4vw,3.4rem)",letterSpacing:".07em"}}>PCL TRIVIA NIGHT</h1><div>Session {session.session_code} • {session.location}</div></header>
-      {session.game_mode==="rickhouse"&&game?<>
+      {game?<>
         <h2 style={{margin:"0 0 .5rem"}}>Rickhouse Trivia • {String(game.round_name||"").replaceAll("_"," ")}</h2>
         {boardVisible&&<div style={{display:"grid",gridTemplateColumns:"minmax(0,4fr) minmax(220px,1fr)",gap:"1rem",alignItems:"start"}}><div><p style={{fontSize:"clamp(1rem,2vw,1.5rem)",margin:"0 0 .6rem"}}>{phase==="board"?`${rickhouse?.picker?.display_name||"The picker"} is selecting the next pour.`:phase.startsWith("angels")?"Angel’s Share":activePour?.category||"Rickhouse Question"}</p><Board/></div><Leaderboard/></div>}
         {activePour&&phase!=="board"&&<section style={{...panel,marginTop:"1rem"}}><h2>{activePour.is_angels_share?"Angel’s Share":activePour.category}</h2>{phase==="angels_wager"?<><p style={{fontSize:"clamp(1.4rem,3vw,2.4rem)"}}>Waiting on wager...</p><p>{rickhouse?.picker?.display_name||"Player"} is choosing a wager.</p></>:<><p style={{fontSize:"clamp(1.4rem,3vw,2.5rem)",fontWeight:800}}>{activePour.question_text}</p>{session.show_answer||["pour_reveal","angels_reveal"].includes(phase)?<div style={{fontSize:"clamp(1.5rem,3.5vw,3rem)",color:"#f3c75f",fontWeight:900}}>Answer: {activePour.correct_answer}</div>:<p>{secondsRemaining===null?"Answers are being graded.":`${secondsRemaining} seconds`}</p>}{activePour.is_angels_share&&game.angels_share_wager!==null&&<p>Wager: {game.angels_share_wager} pts</p>}{parsedAngel&&phase==="angels_reveal"&&<p>{parsedAngel.isCorrect?"Correct":"Incorrect"} • {parsedAngel.pointsAwarded>0?"+":""}{parsedAngel.pointsAwarded} pts</p>}</>}</section>}

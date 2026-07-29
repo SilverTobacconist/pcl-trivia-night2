@@ -441,50 +441,65 @@ setAnswerRevealed(true);
 
   async function exportResultsCsv() {
     if (!session?.id) return;
-  
+
     const response = await fetch(`/api/scoreboard?sessionId=${session.id}`);
     const data = await response.json();
-  
+
     if (!response.ok) {
       setError(data.error || "Could not export results.");
       return;
     }
-  
+
+    const sessionDate = session.created_at
+      ? new Date(session.created_at).toLocaleString("en-US", {
+          timeZone: "America/Chicago",
+          dateStyle: "medium",
+          timeStyle: "short",
+        })
+      : "Unknown date";
+
     const rows = [
-      ["PCL Trivia Night Results"],
-      ["Date", new Date(session.created_at).toLocaleString("en-US", { timeZone: "America/Chicago" })],
-      ["Session Number", session.session_code],
-      ["Location", session.location],
-      ["Host", session.host_name],
-      [],
-      ["Leaderboard"],
-      ["Place", "Player", "Score"],
+      [
+        "Date",
+        "Session Number",
+        "Location",
+        "Host",
+        "Place",
+        "Player",
+        "Score",
+      ],
       ...data.players.map((player: any, index: number) => [
+        sessionDate,
+        session.session_code ?? "",
+        session.location ?? "",
+        session.host_name ?? "",
         index + 1,
         player.display_name,
         player.score,
       ]),
     ];
-  
-    const csv = rows
+
+    const csv = "\uFEFF" + rows
       .map((row) =>
         row
-        .map((value: unknown) => `"${String(value).replace(/"/g, '""')}"`)
+          .map((value: unknown) =>
+            `"${String(value ?? "").replace(/"/g, '""')}"`
+          )
           .join(",")
       )
       .join("\n");
-  
+
     const blob = new Blob([csv], {
       type: "text/csv;charset=utf-8;",
     });
-  
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-  
+
     link.href = url;
-    link.download = `pcl-trivia-results-${session.session_code}.csv`;
+    link.download = `pcl-trivia-results-${session.session_code}-${Date.now()}.csv`;
     link.click();
-  
+
     URL.revokeObjectURL(url);
   }
 
@@ -938,34 +953,50 @@ await loadSession();
   </>
 )}
 
-{(rickhouseGame?.game_phase === "angels_graded" ||
-  rickhouseGame?.game_phase === "pour_graded") && (
-  <button
-    type="button"
-    onClick={revealRickhouseAnswer}
-    style={{ background: "#c28a2e", color: "#111", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginLeft: "0.5rem", fontWeight: "bold" }}
-  >
-    Reveal Answer
-  </button>
-)}
+{["angels_graded", "pour_graded", "angels_reveal", "pour_reveal"].includes(
+  rickhouseGame?.game_phase
+) && (
+  <>
+    <button
+      type="button"
+      onClick={revealRickhouseAnswer}
+      disabled={["angels_reveal", "pour_reveal"].includes(rickhouseGame?.game_phase)}
+      style={{
+        background: ["angels_reveal", "pour_reveal"].includes(rickhouseGame?.game_phase)
+          ? "#666"
+          : "#c28a2e",
+        color: "#111",
+        padding: "0.6rem 1rem",
+        border: "none",
+        borderRadius: "6px",
+        cursor: ["angels_reveal", "pour_reveal"].includes(rickhouseGame?.game_phase)
+          ? "not-allowed"
+          : "pointer",
+        marginLeft: "0.5rem",
+        fontWeight: "bold",
+      }}
+    >
+      {["angels_reveal", "pour_reveal"].includes(rickhouseGame?.game_phase)
+        ? "Answer Revealed"
+        : "Reveal Answer"}
+    </button>
 
-{(rickhouseGame?.game_phase === "angels_reveal" ||
-  rickhouseGame?.game_phase === "pour_reveal") && (
-  <button
-    type="button"
-    onClick={continueRickhouse}
-    style={{
-      background: "#8a5a00",
-      color: "white",
-      padding: "0.6rem 1rem",
-      border: "none",
-      borderRadius: "6px",
-      cursor: "pointer",
-      marginLeft: "0.5rem",
-    }}
-  >
-    Continue Rickhouse
-  </button>
+    <button
+      type="button"
+      onClick={continueRickhouse}
+      style={{
+        background: "#8a5a00",
+        color: "white",
+        padding: "0.6rem 1rem",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        marginLeft: "0.5rem",
+      }}
+    >
+      Continue Rickhouse
+    </button>
+  </>
 )}
 <button
   type="button"
