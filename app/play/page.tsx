@@ -393,13 +393,14 @@ const response = await fetch(submitEndpoint, {
 
           {rickhouseGame?.game_phase === "angels_wager" && (
   <section
-    style={{
-      marginTop: "2rem",
-      padding: "1rem",
-      border: "2px solid #8a5a00",
-      borderRadius: "8px",
-      background: "#fff8dc",
-    }}
+  style={{
+    marginTop: "2rem",
+    padding: "1rem",
+    border: "2px solid #8a5a00",
+    borderRadius: "8px",
+    background: "#fff8dc",
+    color: "#111111",
+  }}
   >
     <h2>Angel’s Share</h2>
 
@@ -433,6 +434,10 @@ const response = await fetch(submitEndpoint, {
             padding: "0.75rem",
             fontSize: "1rem",
             marginBottom: "1rem",
+            background: "#ffffff",
+            color: "#111111",
+            border: "1px solid #999999",
+            borderRadius: "4px",
           }}
         />
 

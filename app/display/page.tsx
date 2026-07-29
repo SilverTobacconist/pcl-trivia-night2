@@ -153,6 +153,8 @@ export default function DisplayPage() {
                 padding: "0.9rem",
                 fontSize: "1.5rem",
                 borderRadius: "10px",
+                background: "#ffffff",
+color: "#111111",
                 border: "2px solid rgba(255,255,255,0.4)",
                 minWidth: "260px",
               }}
