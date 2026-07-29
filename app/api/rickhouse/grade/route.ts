@@ -142,7 +142,7 @@ export async function POST(request: Request) {
       .update({
         current_picker_player_id: nextPickerPlayerId,
         current_pour_id: game.current_pour_id,
-        game_phase: isAngelsShare ? "angels_reveal" : "pour_reveal",
+        game_phase: isAngelsShare ? "angels_graded" : "pour_graded",
         angels_share_result: isAngelsShare
           ? JSON.stringify({
               answer: angelsShareAnswer?.submitted_answer ?? "No answer",
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
     await supabase
       .from("sessions")
       .update({
-        question_status: isAngelsShare ? "angels_reveal" : "pour_reveal",
+        question_status: isAngelsShare ? "angels_graded" : "pour_graded",
         game_mode: "rickhouse",
       })
       .eq("id", game.session_id);
@@ -173,7 +173,7 @@ export async function POST(request: Request) {
       success: true,
       nextPickerPlayerId,
       graded: answers?.length ?? 0,
-      gamePhase: isAngelsShare ? "angels_reveal" : "pour_reveal",
+      gamePhase: isAngelsShare ? "angels_graded" : "pour_graded",
     });
   } catch (error: any) {
     return NextResponse.json(

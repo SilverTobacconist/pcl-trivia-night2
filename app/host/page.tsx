@@ -374,6 +374,20 @@ await loadRickhouseScores(rickhouseGame.id);
 await loadSession();
   }
 
+  async function revealRickhouseAnswer() {
+    if (!rickhouseGame?.id) return;
+    setError("");
+    const response = await fetch("/api/rickhouse/reveal-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gameId: rickhouseGame.id }),
+    });
+    const data = await response.json();
+    if (!response.ok) { setError(data.error || "Could not reveal Rickhouse answer."); return; }
+    await loadRickhouseGame();
+    await loadSession();
+  }
+
   async function revealAnswer() {
     if (!session?.id) return;
   
@@ -402,33 +416,27 @@ setAnswerRevealed(true);
 
   async function endSession() {
     if (!session?.id) return;
-  
-    const confirmed = window.confirm(
-      "End this session? Players will no longer be able to join or submit answers."
-    );
-  
-    if (!confirmed) return;
-  
+    if (!window.confirm("End this session? Players will no longer be able to join or submit answers.")) return;
     setError("");
-  
-    const response = await fetch("/api/end-session", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sessionId: session.id,
-      }),
-    });
-  
-    const data = await response.json();
-  
-    if (!response.ok) {
-      setError(data.error || "Could not end session.");
-      return;
+
+    async function sendEndRequest() {
+      const response = await fetch("/api/end-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: session.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not end session.");
+      return data.session;
     }
-  
-    setSession(data.session);
+
+    try {
+      setSession(await sendEndRequest());
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      try { setSession(await sendEndRequest()); }
+      catch (error: any) { setError(error.message || "Could not end session after retry."); }
+    }
   }
 
   async function exportResultsCsv() {
@@ -443,6 +451,13 @@ setAnswerRevealed(true);
     }
   
     const rows = [
+      ["PCL Trivia Night Results"],
+      ["Date", new Date(session.created_at).toLocaleString("en-US", { timeZone: "America/Chicago" })],
+      ["Session Number", session.session_code],
+      ["Location", session.location],
+      ["Host", session.host_name],
+      [],
+      ["Leaderboard"],
       ["Place", "Player", "Score"],
       ...data.players.map((player: any, index: number) => [
         index + 1,
@@ -888,7 +903,7 @@ await loadSession();
     <p>
       <strong>Status:</strong> {rickhouseGame.status}
     </p>
-{!rickhouseGame.game_phase?.startsWith("cask_strength") && (
+{["pour_question", "angels_question"].includes(rickhouseGame.game_phase) && (
   <>
     <button
       type="button"
@@ -921,6 +936,17 @@ await loadSession();
       Grade Rickhouse Pour
     </button>
   </>
+)}
+
+{(rickhouseGame?.game_phase === "angels_graded" ||
+  rickhouseGame?.game_phase === "pour_graded") && (
+  <button
+    type="button"
+    onClick={revealRickhouseAnswer}
+    style={{ background: "#c28a2e", color: "#111", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginLeft: "0.5rem", fontWeight: "bold" }}
+  >
+    Reveal Answer
+  </button>
 )}
 
 {(rickhouseGame?.game_phase === "angels_reveal" ||
@@ -1164,7 +1190,7 @@ await loadSession();
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(5, 1fr)",
+        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
         gap: "0.5rem",
         marginTop: "1rem",
       }}
@@ -1178,14 +1204,20 @@ await loadSession();
           columnPours[0]?.category || `Category ${columnIndex + 1}`;
 
         return (
-          <div key={columnIndex}>
+          <div key={columnIndex} style={{ display: "grid", gridTemplateRows: `78px repeat(${Math.max(columnPours.length, 1)}, 64px)`, gap: "0.5rem", minWidth: 0 }}>
             <div
               style={{
                 background: "#222",
                 color: "white",
                 padding: "0.75rem",
                 fontWeight: "bold",
-                minHeight: "60px",
+                height: "78px",
+                boxSizing: "border-box",
+                overflow: "hidden",
+                overflowWrap: "anywhere",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               {categoryName}
@@ -1196,8 +1228,13 @@ await loadSession();
                 key={pour.id}
                 style={{
                   border: "1px solid #ccc",
-                  padding: "0.75rem",
+                  height: "64px",
+                  boxSizing: "border-box",
                   textAlign: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
                   background: pour.is_used ? "#ddd" : "#fafafa",
                 }}
               >

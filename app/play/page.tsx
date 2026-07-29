@@ -375,14 +375,14 @@ const response = await fetch(submitEndpoint, {
                   <p><strong>Time:</strong> {caskSecondsRemaining ?? 30} seconds</p>
                   <p>Your maximum wager is {caskStrengthEntry.starting_score}.</p>
                   <input type="number" min="0" max={caskStrengthEntry.starting_score} value={caskWager} disabled={caskStrengthEntry.wager!==null} onChange={(e)=>{setCaskWager(e.target.value);caskWagerRef.current=e.target.value;}} style={{padding:"0.75rem",width:"100%",marginBottom:"0.75rem",background:"#ffffff",color:"#111111",border:"1px solid #999999",borderRadius:"4px"}} />
-                  <button type="button" disabled={caskStrengthEntry.wager!==null} onClick={()=>submitCaskWager(false)}>Submit Wager</button>
+                  <button type="button" disabled={caskStrengthEntry.wager!==null} onClick={()=>submitCaskWager(false)} style={{background:caskStrengthEntry.wager!==null?"#777":"#5b3511",color:"white",padding:"0.75rem 1.25rem",border:"none",borderRadius:"6px",cursor:caskStrengthEntry.wager!==null?"not-allowed":"pointer",fontWeight:"bold"}}>Submit Wager</button>
                   {caskStrengthEntry.wager!==null && <p>Wager submitted.</p>}
                 </>}
                 {rickhouseGame.game_phase === "cask_strength_question" && <>
                   <p><strong>Time:</strong> {caskSecondsRemaining ?? 30} seconds</p>
                   <div style={{padding:"1rem",border:"1px solid #aaa",borderRadius:"8px",fontWeight:"bold"}}>{rickhouseGame.cask_strength_question_text}</div>
                   <textarea value={caskAnswer} disabled={caskStrengthEntry.submitted_answer!==null} onChange={(e)=>{setCaskAnswer(e.target.value);caskAnswerRef.current=e.target.value;}} style={{width:"100%",minHeight:"90px",marginTop:"1rem",padding:"0.75rem",background:"#ffffff",color:"#111111",border:"1px solid #999999",borderRadius:"4px"}} />
-                  <button type="button" disabled={caskStrengthEntry.submitted_answer!==null} onClick={()=>submitCaskAnswer(false)}>Submit Answer</button>
+                  <button type="button" disabled={caskStrengthEntry.submitted_answer!==null} onClick={()=>submitCaskAnswer(false)} style={{background:caskStrengthEntry.submitted_answer!==null?"#777":"#5b3511",color:"white",padding:"0.75rem 1.25rem",border:"none",borderRadius:"6px",cursor:caskStrengthEntry.submitted_answer!==null?"not-allowed":"pointer",fontWeight:"bold"}}>Submit Answer</button>
                   {caskStrengthEntry.submitted_answer!==null && <p>Answer submitted.</p>}
                 </>}
                 {["cask_strength_grading","cask_strength_reveal"].includes(rickhouseGame.game_phase) && <p>Your answer is locked. Watch the communal display for the reveal.</p>}
@@ -540,7 +540,7 @@ const response = await fetch(submitEndpoint, {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(5, 1fr)",
+        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
         gap: "0.4rem",
         marginTop: "1rem",
         overflowX: "auto",
@@ -555,7 +555,7 @@ const response = await fetch(submitEndpoint, {
           columnPours[0]?.category || `Category ${columnIndex + 1}`;
 
         return (
-          <div key={columnIndex}>
+          <div key={columnIndex} style={{ display: "grid", gridTemplateRows: `72px repeat(${Math.max(columnPours.length, 1)}, 56px)`, gap: "0.4rem", minWidth: 0 }}>
             <div
               style={{
                 background: "#222",
@@ -563,7 +563,13 @@ const response = await fetch(submitEndpoint, {
                 padding: "0.5rem",
                 fontWeight: "bold",
                 fontSize: "0.8rem",
-                minHeight: "50px",
+                height: "72px",
+                boxSizing: "border-box",
+                overflow: "hidden",
+                overflowWrap: "anywhere",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               {categoryName}
@@ -577,7 +583,9 @@ const response = await fetch(submitEndpoint, {
                 disabled={!isRickhousePicker || pour.is_used}
                 style={{
                   width: "100%",
-                  minHeight: "48px",
+                  height: "56px",
+                  boxSizing: "border-box",
+                  overflow: "hidden",
                   marginTop: "0.25rem",
                   border: "1px solid #ccc",
                   background: pour.is_used
