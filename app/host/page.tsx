@@ -454,7 +454,7 @@ setAnswerRevealed(true);
     const csv = rows
       .map((row) =>
         row
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .map((value: unknown) => `"${String(value).replace(/"/g, '""')}"`)
           .join(",")
       )
       .join("\n");
@@ -937,10 +937,9 @@ await loadSession();
     Continue Rickhouse
   </button>
 )}
-
 <button
   type="button"
-  onClick={loadRickhouseScores}
+  onClick={() => void loadRickhouseScores()}
   style={{
     background: "#444",
     color: "white",

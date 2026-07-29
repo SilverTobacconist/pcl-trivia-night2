@@ -25,8 +25,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const playerIds = [...new Set((scores || []).map((score) => score.player_id))];
-
+  const playerIds = Array.from(
+    new Set((scores || []).map((score) => score.player_id))
+  );
   const { data: players } = await supabase
     .from("players")
     .select("id, display_name")

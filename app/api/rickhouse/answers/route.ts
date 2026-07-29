@@ -56,8 +56,10 @@ if (pourError || !pour) {
     );
   }
 
-  const playerIds = [...new Set((answers || []).map((answer) => answer.player_id))];
-
+  const playerIds = Array.from(
+    new Set((answers || []).map((answer) => answer.player_id))
+  );
+  
   const { data: players } = await supabase
     .from("players")
     .select("id, display_name")

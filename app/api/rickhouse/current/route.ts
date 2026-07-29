@@ -56,9 +56,9 @@ export async function GET(request: Request) {
       );
     }
 
-    const playerIds = [
-      ...new Set((scoreRows || []).map((score) => score.player_id)),
-    ];
+    const playerIds = Array.from(
+      new Set((scoreRows || []).map((score) => score.player_id))
+    );
 
     const { data: players } = await supabase
       .from("players")
