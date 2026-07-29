@@ -888,36 +888,40 @@ await loadSession();
     <p>
       <strong>Status:</strong> {rickhouseGame.status}
     </p>
+{!rickhouseGame.game_phase?.startsWith("cask_strength") && (
+  <>
     <button
-  type="button"
-  onClick={loadRickhouseAnswers}
-  style={{
-    background: "#333",
-    color: "white",
-    padding: "0.6rem 1rem",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    marginRight: "0.5rem",
-  }}
->
-  Load Rickhouse Answers
-</button>
+      type="button"
+      onClick={loadRickhouseAnswers}
+      style={{
+        background: "#333",
+        color: "white",
+        padding: "0.6rem 1rem",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        marginRight: "0.5rem",
+      }}
+    >
+      Load Rickhouse Answers
+    </button>
 
-<button
-  type="button"
-  onClick={gradeRickhouseAnswers}
-  style={{
-    background: "#005f3c",
-    color: "white",
-    padding: "0.6rem 1rem",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-  }}
->
-  Grade Rickhouse Pour
-</button>
+    <button
+      type="button"
+      onClick={gradeRickhouseAnswers}
+      style={{
+        background: "#005f3c",
+        color: "white",
+        padding: "0.6rem 1rem",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+      }}
+    >
+      Grade Rickhouse Pour
+    </button>
+  </>
+)}
 
 {(rickhouseGame?.game_phase === "angels_reveal" ||
   rickhouseGame?.game_phase === "pour_reveal") && (

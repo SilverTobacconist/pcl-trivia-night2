@@ -365,7 +365,7 @@ const response = await fetch(submitEndpoint, {
           </p>
 
           {rickhouseGame?.game_phase?.startsWith("cask_strength") && (
-            <section style={{marginTop:"2rem",padding:"1.25rem",border:"2px solid #5b3511",borderRadius:"10px",background:"#fff8dc"}}>
+            <section style={{marginTop:"2rem",padding:"1.25rem",border:"2px solid #5b3511",borderRadius:"10px",background:"#fff8dc",color:"#111111"}}>
               <h2>Cask Strength</h2>
               {!caskStrengthEntry ? <><p>Only players with a positive Rickhouse score qualify.</p><p><strong>Your status:</strong> Eliminated</p><p>Watch the final round on the communal display.</p></> : <>
                 <p><strong>Subcategory:</strong> {rickhouseGame.cask_strength_subcategory}</p>
@@ -374,14 +374,14 @@ const response = await fetch(submitEndpoint, {
                 {rickhouseGame.game_phase === "cask_strength_wager" && <>
                   <p><strong>Time:</strong> {caskSecondsRemaining ?? 30} seconds</p>
                   <p>Your maximum wager is {caskStrengthEntry.starting_score}.</p>
-                  <input type="number" min="0" max={caskStrengthEntry.starting_score} value={caskWager} disabled={caskStrengthEntry.wager!==null} onChange={(e)=>{setCaskWager(e.target.value);caskWagerRef.current=e.target.value;}} style={{padding:"0.75rem",width:"100%",marginBottom:"0.75rem"}} />
+                  <input type="number" min="0" max={caskStrengthEntry.starting_score} value={caskWager} disabled={caskStrengthEntry.wager!==null} onChange={(e)=>{setCaskWager(e.target.value);caskWagerRef.current=e.target.value;}} style={{padding:"0.75rem",width:"100%",marginBottom:"0.75rem",background:"#ffffff",color:"#111111",border:"1px solid #999999",borderRadius:"4px"}} />
                   <button type="button" disabled={caskStrengthEntry.wager!==null} onClick={()=>submitCaskWager(false)}>Submit Wager</button>
                   {caskStrengthEntry.wager!==null && <p>Wager submitted.</p>}
                 </>}
                 {rickhouseGame.game_phase === "cask_strength_question" && <>
                   <p><strong>Time:</strong> {caskSecondsRemaining ?? 30} seconds</p>
                   <div style={{padding:"1rem",border:"1px solid #aaa",borderRadius:"8px",fontWeight:"bold"}}>{rickhouseGame.cask_strength_question_text}</div>
-                  <textarea value={caskAnswer} disabled={caskStrengthEntry.submitted_answer!==null} onChange={(e)=>{setCaskAnswer(e.target.value);caskAnswerRef.current=e.target.value;}} style={{width:"100%",minHeight:"90px",marginTop:"1rem",padding:"0.75rem"}} />
+                  <textarea value={caskAnswer} disabled={caskStrengthEntry.submitted_answer!==null} onChange={(e)=>{setCaskAnswer(e.target.value);caskAnswerRef.current=e.target.value;}} style={{width:"100%",minHeight:"90px",marginTop:"1rem",padding:"0.75rem",background:"#ffffff",color:"#111111",border:"1px solid #999999",borderRadius:"4px"}} />
                   <button type="button" disabled={caskStrengthEntry.submitted_answer!==null} onClick={()=>submitCaskAnswer(false)}>Submit Answer</button>
                   {caskStrengthEntry.submitted_answer!==null && <p>Answer submitted.</p>}
                 </>}
