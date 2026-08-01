@@ -9,6 +9,7 @@ export async function POST(request: Request) {
     const playerId = String(body.playerId ?? "").trim();
     const questionId = String(body.questionId ?? "").trim();
     const submittedAnswer = String(body.submittedAnswer ?? "").trim();
+    const autoSubmitted = body.autoSubmitted === true;
 
     if (!sessionId || !playerId || !questionId || !submittedAnswer) {
       return NextResponse.json(
@@ -41,7 +42,11 @@ if (session.question_ends_at) {
   const now = new Date();
   const endsAt = new Date(session.question_ends_at);
 
-  if (now > endsAt) {
+  // A phone submits the text box automatically as its countdown reaches zero.
+  // Allow that request a brief network-arrival grace period, while continuing
+  // to reject ordinary manual submissions after time expires.
+  const autoSubmitGraceMs = autoSubmitted ? 5000 : 0;
+  if (now.getTime() > endsAt.getTime() + autoSubmitGraceMs) {
     await supabase
       .from("sessions")
       .update({

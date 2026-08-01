@@ -10,6 +10,7 @@ export default function PlayPage() {
   const [answerText, setAnswerText] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectingPourId, setSelectingPourId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [rickhouseGame, setRickhouseGame] = useState<any>(null);
@@ -36,6 +37,7 @@ const caskAutoSubmittedRef = useRef("");
   const [lastCallAnswer, setLastCallAnswer] = useState("");
   const [lastCallSubmitting, setLastCallSubmitting] = useState("");
   const currentQuestionIdRef = useRef<string | null>(null);
+  const currentQuestionSignatureRef = useRef<string | null>(null);
   const autoSubmittedQuestionIdRef = useRef<string | null>(null);
   const answerTextRef = useRef("");
 
@@ -61,9 +63,9 @@ const caskAutoSubmittedRef = useRef("");
     const response = await fetch(
       `/api/rickhouse/player-state?sessionId=${sessionId}&playerId=${playerId}`
     );
-  
+
     const data = await response.json();
-  
+
     if (!response.ok) {
       setRickhouseGame(null);
 setRickhousePours([]);
@@ -77,7 +79,7 @@ setRickhouseStandings([]);
 setProposedNextPicker(null);
 return;
     }
-  
+
     setRickhouseGame(data.game);
     setRickhousePours(data.pours);
     setRickhousePicker(data.picker);
@@ -141,7 +143,11 @@ if (data.game?.cask_strength_ends_at) {
     }
 
     const newQuestionId = data.session.current_question_id;
-    const previousQuestionId = currentQuestionIdRef.current;
+    const newQuestionText = String(data.session.current_question_text ?? "");
+    const newQuestionSignature = newQuestionId
+      ? `${newQuestionId}:${newQuestionText}`
+      : null;
+    const previousQuestionSignature = currentQuestionSignatureRef.current;
 
     setSession(data.session);
     setPlayer(data.player);
@@ -154,8 +160,12 @@ if (data.game?.cask_strength_ends_at) {
     // Ignore brief polling snapshots where the server has temporarily cleared
     // the question. Treating null as a new question used to erase an answer
     // that the player was still typing.
-    if (newQuestionId && newQuestionId !== previousQuestionId) {
+    if (
+      newQuestionId &&
+      newQuestionSignature !== previousQuestionSignature
+    ) {
       currentQuestionIdRef.current = newQuestionId;
+      currentQuestionSignatureRef.current = newQuestionSignature;
       autoSubmittedQuestionIdRef.current = null;
       setSubmitted(false);
       setAnswerText("");
@@ -176,13 +186,13 @@ if (data.game?.cask_strength_ends_at) {
     finally { setLastCallSubmitting(""); }
   }
 
-  async function submitAnswer(answerToSubmit?: string) {
+  async function submitAnswer(answerToSubmit?: string, autoSubmitted = false) {
     if (!session?.id || !player?.id || !session?.current_question_id) {
       setError("Missing question or player information.");
       return;
     }
 
-    const finalAnswer = String(answerTextRef.current ?? "");
+    const finalAnswer = String(answerToSubmit ?? answerTextRef.current ?? "");
 
     if (!finalAnswer.trim()) {
       setError("Please enter an answer before submitting.");
@@ -216,6 +226,7 @@ const response = await fetch(submitEndpoint, {
           playerId: String(player.id),
           questionId: String(session.current_question_id),
           submittedAnswer: finalAnswer,
+          autoSubmitted,
         }),
       });
 
@@ -240,11 +251,12 @@ const response = await fetch(submitEndpoint, {
   }
 
   async function selectRickhousePour(pourId: string) {
-    if (!rickhouseGame?.id || !player?.id) return;
-  
+    if (!rickhouseGame?.id || !player?.id || selectingPourId) return;
+
     setError("");
-  
-    const response = await fetch("/api/rickhouse/select-pour", {
+    setSelectingPourId(pourId);
+    try {
+      const response = await fetch("/api/rickhouse/select-pour", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -255,30 +267,36 @@ const response = await fetch(submitEndpoint, {
         playerId: player.id,
       }),
     });
-  
-    const data = await response.json();
-  
+
+      const data = await response.json();
+
     if (!response.ok) {
       setError(data.error || "Could not select pour.");
-      return;
+        return;
     }
-  
-    setRickhouseGame(data.game);
-    await loadGame();
+
+      setRickhouseGame(data.game);
+      setMessage("Square selected.");
+      await loadGame();
+    } catch (error: any) {
+      setError(error.message || "Could not select pour.");
+    } finally {
+      setSelectingPourId(null);
+    }
   }
 
   async function submitAngelsShareWager() {
     if (!rickhouseGame?.id || !player?.id) return;
-  
+
     const wager = Number(angelsShareWager);
-  
+
     if (Number.isNaN(wager) || wager < 0 || wager > maxAngelsShareWager) {
       setError(`Enter a wager between 0 and ${maxAngelsShareWager}.`);
       return;
     }
-  
+
     setError("");
-  
+
     const response = await fetch("/api/rickhouse/submit-wager", {
       method: "POST",
       headers: {
@@ -290,14 +308,14 @@ const response = await fetch(submitEndpoint, {
         wagerAmount: wager,
       }),
     });
-  
+
     const data = await response.json();
-  
+
     if (!response.ok) {
       setError(data.error || "Could not submit Angel's Share wager.");
       return;
     }
-  
+
     setAngelsShareWager("");
     await loadGame();
   }
@@ -311,6 +329,16 @@ const response = await fetch(submitEndpoint, {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timeout = window.setTimeout(() => {
+      setMessage("");
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [message]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -333,8 +361,10 @@ const response = await fetch(submitEndpoint, {
       return;
     }
 
-    autoSubmittedQuestionIdRef.current = session.current_question_id;
-    submitAnswer();
+    const questionId = session.current_question_id;
+    const typedAnswer = answerTextRef.current;
+    autoSubmittedQuestionIdRef.current = questionId;
+    void submitAnswer(typedAnswer, true);
   }, [
     secondsRemaining,
     session?.current_question_id,
@@ -629,7 +659,7 @@ const response = await fetch(submitEndpoint, {
                 key={pour.id}
                 type="button"
                 onClick={() => selectRickhousePour(pour.id)}
-                disabled={!isRickhousePicker || pour.is_used}
+                disabled={!isRickhousePicker || pour.is_used || selectingPourId !== null}
                 style={{
                   width: "100%",
                   height: "56px",
@@ -637,7 +667,9 @@ const response = await fetch(submitEndpoint, {
                   overflow: "hidden",
                   marginTop: "0.25rem",
                   border: "1px solid #ccc",
-                  background: pour.is_used
+                  background: selectingPourId === pour.id
+                    ? "#1f7a3f"
+                    : pour.is_used
                     ? "#ddd"
                     : isRickhousePicker
                     ? "#111"
@@ -648,13 +680,18 @@ const response = await fetch(submitEndpoint, {
                     ? "white"
                     : "#333",
                   cursor:
-                    !isRickhousePicker || pour.is_used
+                    !isRickhousePicker || pour.is_used || selectingPourId !== null
                       ? "not-allowed"
                       : "pointer",
                   fontWeight: "bold",
+                  transform: selectingPourId === pour.id ? "translateY(2px)" : "none",
                 }}
               >
-                {pour.is_used ? "" : pour.point_value}
+                {selectingPourId === pour.id
+                  ? "Selecting..."
+                  : pour.is_used
+                  ? ""
+                  : pour.point_value}
               </button>
             ))}
           </div>

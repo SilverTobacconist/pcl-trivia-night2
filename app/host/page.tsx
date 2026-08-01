@@ -35,6 +35,29 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
   const [lastCallActionName, setLastCallActionName] = useState("");
   const [lastCallMessage, setLastCallMessage] = useState("");
   const [endingLastCall, setEndingLastCall] = useState(false);
+  const [hostAction, setHostAction] = useState("");
+
+  async function runHostAction(name: string, action: () => Promise<any>) {
+    if (hostAction) return;
+    setHostAction(name);
+    try {
+      await action();
+    } catch (error: any) {
+      setError(error.message || "The request could not reach the server.  Please try again.");
+    } finally {
+      setHostAction("");
+    }
+  }
+
+  useEffect(() => {
+    if (!lastCallMessage) return;
+
+    const timeout = window.setTimeout(() => {
+      setLastCallMessage("");
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [lastCallMessage]);
 
   const lastCallButtonStyle = (disabled = false) => ({
     background: disabled ? "#777" : "#5b3511",
@@ -299,11 +322,16 @@ setSelectedRickhouseAnswers(
     const activeSessionId = sessionIdOverride || session?.id;
     if (!activeSessionId) return;
   
-    const response = await fetch(
-      `/api/rickhouse/current?sessionId=${activeSessionId}`
-    );
-  
-    const data = await response.json();
+    let response: Response;
+    let data: any;
+    try {
+      response = await fetch(`/api/rickhouse/current?sessionId=${activeSessionId}`);
+      data = await response.json();
+    } catch {
+      // Development previews occasionally restart their server.  Keep the
+      // current game on screen and let the next poll reconnect quietly.
+      return;
+    }
   
     if (!response.ok) {
       setRickhouseGame(null);
@@ -713,14 +741,16 @@ await loadSession();
     if (!session?.id) return;
 
     const interval = setInterval(() => {
-      loadPlayers();
-      loadScoreboard();
-      loadRickhouseGame();
-      loadLastCall();
+      void Promise.allSettled([
+        loadPlayers(),
+        loadScoreboard(),
+        loadRickhouseGame(),
+        loadLastCall(),
+        currentQuestion?.question_id && selectedAnswers.length === 0
+          ? loadAnswers()
+          : Promise.resolve(),
+      ]);
 
-      if (currentQuestion?.question_id && selectedAnswers.length === 0) {
-        loadAnswers();
-      }
     }, 5000);
 
     return () => clearInterval(interval);
@@ -840,13 +870,14 @@ await loadSession();
           </p>
 
           <div style={{ marginTop: "1rem" }}>
-          <button onClick={loadPlayers} style={{ background: "#333", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  Refresh Players
+          <button disabled={Boolean(hostAction)} onClick={() => runHostAction("players", loadPlayers)} style={{ background: "#333", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  {hostAction === "players" ? "Refreshing..." : "Refresh Players"}
 </button>
 
 {!rickhouseGame && session.status === "active" && (
 <button
-  onClick={startRickhouseTrivia}
+  onClick={() => runHostAction("rickhouse", startRickhouseTrivia)}
+  disabled={Boolean(hostAction)}
   style={{
     background: "#5b3511",
     color: "white",
@@ -857,17 +888,17 @@ await loadSession();
     marginRight: "0.5rem",
   }}
 >
-  Start Rickhouse Trivia
+  {hostAction === "rickhouse" ? "Starting..." : "Start Rickhouse Trivia"}
 </button>
 )}
 
-<button onClick={loadAnswers} style={{ background: "#444", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  Load Answers
+<button disabled={Boolean(hostAction)} onClick={() => runHostAction("answers", loadAnswers)} style={{ background: "#444", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  {hostAction === "answers" ? "Loading..." : "Load Answers"}
 </button>
 
 <button
-  onClick={revealAnswer}
-  disabled={answerRevealed}
+  onClick={() => runHostAction("reveal", revealAnswer)}
+  disabled={answerRevealed || Boolean(hostAction)}
   style={{
     background: answerRevealed ? "#666" : "#8a5a00",
     color: "white",
@@ -879,15 +910,16 @@ await loadSession();
     opacity: answerRevealed ? 0.7 : 1,
   }}
 >
-  {answerRevealed ? "Answer Revealed" : "Reveal Answer"}
+  {hostAction === "reveal" ? "Revealing..." : answerRevealed ? "Answer Revealed" : "Reveal Answer"}
 </button>
 
-<button onClick={loadNextQuestion} style={{ background: "#111", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  Next Question
+<button disabled={Boolean(hostAction)} onClick={() => runHostAction("next", loadNextQuestion)} style={{ background: "#111", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  {hostAction === "next" ? "Loading..." : "Next Question"}
 </button>
 
 <button
-  onClick={endSession}
+  onClick={() => runHostAction("last-call", endSession)}
+  disabled={Boolean(hostAction)}
   style={{
     background: "#8a0000",
     color: "white",
@@ -898,11 +930,12 @@ await loadSession();
     marginRight: "0.5rem",
   }}
 >
-  Begin Last Call
+  {hostAction === "last-call" ? "Beginning..." : "Begin Last Call"}
 </button>
 
 <button
-  onClick={exportResultsCsv}
+  onClick={() => runHostAction("export", exportResultsCsv)}
+  disabled={Boolean(hostAction)}
   style={{
     background: "#005f3c",
     color: "white",
@@ -913,11 +946,11 @@ await loadSession();
     marginRight: "0.5rem",
   }}
 >
-  Export Results
+  {hostAction === "export" ? "Exporting..." : "Export Results"}
 </button>
 
-<button onClick={loadScoreboard} style={{ background: "#555", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  Load Scoreboard
+<button disabled={Boolean(hostAction)} onClick={() => runHostAction("scoreboard", loadScoreboard)} style={{ background: "#555", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  {hostAction === "scoreboard" ? "Loading..." : "Load Scoreboard"}
 </button>
 
 <button
