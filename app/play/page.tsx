@@ -30,6 +30,11 @@ const [caskSecondsRemaining, setCaskSecondsRemaining] = useState<number | null>(
 const caskWagerRef = useRef("");
 const caskAnswerRef = useRef("");
 const caskAutoSubmittedRef = useRef("");
+  const [lastCall, setLastCall] = useState<any>(null);
+  const [lastCallEntry, setLastCallEntry] = useState<any>(null);
+  const [lastCallWager, setLastCallWager] = useState("");
+  const [lastCallAnswer, setLastCallAnswer] = useState("");
+  const [lastCallSubmitting, setLastCallSubmitting] = useState("");
   const currentQuestionIdRef = useRef<string | null>(null);
   const autoSubmittedQuestionIdRef = useRef<string | null>(null);
   const answerTextRef = useRef("");
@@ -38,7 +43,10 @@ const caskAutoSubmittedRef = useRef("");
     const activeSessionId = sessionIdOverride || session?.id;
     if (!activeSessionId) return;
 
-    const response = await fetch(`/api/scoreboard?sessionId=${activeSessionId}&t=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(
+      `/api/scoreboard?sessionId=${activeSessionId}&t=${Date.now()}`,
+      { cache: "no-store" }
+    );
     const data = await response.json();
 
     if (!response.ok) {
@@ -101,7 +109,6 @@ if (data.game?.cask_strength_ends_at) {
 
   async function loadGame() {
     setError("");
-    setMessage("");
 
     const params = new URLSearchParams(window.location.search);
 
@@ -141,11 +148,12 @@ if (data.game?.cask_strength_ends_at) {
     updateTimer(data.session);
     await loadScoreboard(data.session.id);
     await loadRickhouseState(data.session.id, data.player.id);
+    const lastResponse = await fetch(`/api/last-call/current?sessionId=${data.session.id}&playerId=${data.player.id}&t=${Date.now()}`, { cache: "no-store" });
+    if (lastResponse.ok) { const lastData = await lastResponse.json(); setLastCall(lastData.game); setLastCallEntry(lastData.entry); }
 
     // Ignore brief polling snapshots where the server has temporarily cleared
-    // the question.  Treating null as a new question used to erase an answer
-    // that the player was still typing, then erase it again when the same
-    // question reappeared on the next poll.
+    // the question. Treating null as a new question used to erase an answer
+    // that the player was still typing.
     if (newQuestionId && newQuestionId !== previousQuestionId) {
       currentQuestionIdRef.current = newQuestionId;
       autoSubmittedQuestionIdRef.current = null;
@@ -153,6 +161,19 @@ if (data.game?.cask_strength_ends_at) {
       setAnswerText("");
       answerTextRef.current = "";
     }
+  }
+
+  async function submitLastCall(action: string, extras: any = {}) {
+    if (!session?.id || !player?.id || lastCallSubmitting) return;
+    setError(""); setMessage(""); setLastCallSubmitting(action);
+    try {
+      const response = await fetch("/api/last-call/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sessionId: session.id, playerId: player.id, ...extras }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not submit Last Call response.");
+      await loadGame();
+      setMessage(action === "vote" ? "Difficulty vote submitted." : action === "wager" ? "Wager submitted." : "Answer submitted.");
+    } catch (error: any) { setError(error.message || "Could not submit Last Call response."); }
+    finally { setLastCallSubmitting(""); }
   }
 
   async function submitAnswer(answerToSubmit?: string) {
@@ -173,10 +194,8 @@ if (data.game?.cask_strength_ends_at) {
     setSubmitting(true);
 
     try {
-      // The active Rickhouse game is the authoritative signal.  The session
-      // row can briefly be stale on a player's device immediately after the
-      // host starts Rickhouse, which previously sent valid submissions to the
-      // regular trivia answers table.
+      // The active Rickhouse game is authoritative because the session row can
+      // briefly be stale immediately after the host starts Rickhouse.
       const isRickhouseQuestion =
         Boolean(rickhouseGame?.id) &&
         ["question", "angels_question"].includes(
@@ -378,7 +397,23 @@ const response = await fetch(submitEndpoint, {
             <strong>Session:</strong> {session.session_code}
           </p>
 
-          {rickhouseGame?.game_phase?.startsWith("cask_strength") && (
+          {lastCall && (
+            <section style={{ marginTop: "2rem", padding: "1.25rem", border: "2px solid #8a5a00", borderRadius: "10px", background: "#fff8dc", color: "#111" }}>
+              <h2>Last Call</h2>
+              {lastCall.phase === "voting" && <>{lastCallEntry?.difficulty_vote ? <p style={{color:"#176b2c",fontWeight:800}}>Your difficulty vote is locked in.</p> : <><p>Choose the difficulty of the final question.  Voting is your ticket into Last Call.</p><div style={{ display: "grid", gap: ".5rem" }}>{[[1,"Easy"],[2,"Medium"],[3,"Hard"],[4,"Extra Hard"]].map(([vote,label]) => <button key={vote} disabled={Boolean(lastCallSubmitting)} onClick={() => submitLastCall("vote", { vote })} style={{ padding: ".8rem", background:lastCallSubmitting==="vote"?"#777":"#5b3511", color: "white", border: 0, borderRadius: "6px",cursor:lastCallSubmitting?"wait":"pointer",fontWeight:800 }}>{lastCallSubmitting==="vote"?"Recording Vote...":label}</button>)}</div></>}</>}
+              {lastCall.phase !== "voting" && !lastCallEntry && <p>You did not vote, so you are not eligible for Last Call.  Watch the final on the communal display.</p>}
+              {lastCallEntry && lastCall.phase !== "voting" && <>
+                <p><strong>Category:</strong> {lastCall.category}</p><p><strong>Subcategory:</strong> {lastCall.subcategory}</p><p><strong>Difficulty:</strong> {lastCall.selected_difficulty}</p><p><strong>Your maximum wager:</strong> {lastCallEntry.starting_score} session points</p>
+                {lastCall.phase === "wagering" && (lastCallEntry.wager !== null ? <p style={{color:"#176b2c",fontWeight:800}}>Your wager of {lastCallEntry.wager} is locked in.</p> : <><input type="number" min="0" max={lastCallEntry.starting_score} value={lastCallWager} onChange={(event) => setLastCallWager(event.target.value)} style={{ width: "100%", padding: ".75rem", boxSizing: "border-box" }} /><button disabled={Boolean(lastCallSubmitting)} onClick={() => submitLastCall("wager", { wager: Number(lastCallWager) })} style={{ marginTop: ".5rem", padding: ".75rem 1rem",background:lastCallSubmitting?"#777":"#5b3511",color:"white",border:0,borderRadius:"6px",cursor:lastCallSubmitting?"wait":"pointer",fontWeight:800 }}>{lastCallSubmitting==="wager"?"Submitting Wager...":"Submit Wager"}</button></>)}
+                {lastCall.phase === "question" && <>{lastCallEntry.submitted_answer !== null ? <p style={{color:"#176b2c",fontWeight:800}}>Your answer is locked in.</p> : <><h3>{lastCall.question_text}</h3><textarea value={lastCallAnswer} onChange={(event) => setLastCallAnswer(event.target.value)} style={{ width: "100%", minHeight: "90px", padding: ".75rem", boxSizing: "border-box" }} /><button disabled={Boolean(lastCallSubmitting)||!lastCallAnswer.trim()} onClick={() => submitLastCall("answer", { answer: lastCallAnswer })} style={{ marginTop: ".5rem", padding: ".75rem 1rem",background:lastCallSubmitting||!lastCallAnswer.trim()?"#777":"#5b3511",color:"white",border:0,borderRadius:"6px",cursor:lastCallSubmitting?"wait":"pointer",fontWeight:800 }}>{lastCallSubmitting==="answer"?"Submitting Answer...":"Submit Answer"}</button></>}</>}
+                {["grading","reveal"].includes(lastCall.phase) && <p>Your answer is locked.  Watch the reveal on the communal display.</p>}
+                {lastCall.phase === "complete" && <p><strong>Last Call is complete.</strong>  Final session score: {lastCallEntry.final_score}.</p>}
+              </>}
+              <h3>Session Leaderboard</h3><ol>{scoreboard.map((score) => <li key={score.id}>{score.display_name} — {score.score} pts</li>)}</ol>
+            </section>
+          )}
+
+{!lastCall && rickhouseGame?.game_phase?.startsWith("cask_strength") && (
             <section style={{marginTop:"2rem",padding:"1.25rem",border:"2px solid #5b3511",borderRadius:"10px",background:"#fff8dc",color:"#111111"}}>
               <h2>Cask Strength</h2>
               {!caskStrengthEntry ? <><p>Only players with a positive Rickhouse score qualify.</p><p><strong>Your status:</strong> Eliminated</p><p>Watch the final round on the communal display.</p></> : <>
@@ -629,10 +664,14 @@ const response = await fetch(submitEndpoint, {
   </section>
 )}
 
-          {!rickhouseGame?.game_phase?.startsWith("cask_strength") && session.current_question_text ? (
+          {!lastCall && !rickhouseGame?.game_phase?.startsWith("cask_strength") && session.current_question_text ? (
             <>
               <p>
                 <strong>Category:</strong> {session.current_category}
+              </p>
+
+              <p>
+                <strong>Difficulty:</strong> {session.current_difficulty}
               </p>
 
               <p>
@@ -659,31 +698,13 @@ const response = await fetch(submitEndpoint, {
                 {session.current_question_text}
               </div>
 
-              {session.show_answer && (
-                <div
-                  style={{
-                    border: "2px solid #c28a2e",
-                    background: "#fff8dc",
-                    color: "#111111",
-                    padding: "1rem",
-                    borderRadius: "8px",
-                    marginBottom: "1rem",
-                    fontSize: "1.25rem",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Answer: {session.current_answer}
-                </div>
-              )}
-
-              {!(rickhouseGame?.game_phase === "angels_question" && !isAngelsSharePlayer) && !session.show_answer ? <>
-              <textarea
+              {session.show_answer ? <div style={{padding:"1rem",marginBottom:"1rem",border:"2px solid #8a5a00",borderRadius:"8px",background:"#fff8dc",color:"#111"}}><strong>Correct Answer:</strong> {session.current_answer}</div> : <textarea
   value={answerText}
   onChange={(event) => {
     setAnswerText(event.target.value);
     answerTextRef.current = event.target.value;
   }}
-  disabled={submitted || submitting || secondsRemaining === 0 || session.show_answer}
+  disabled={submitted || submitting || secondsRemaining === 0}
   placeholder="Type your answer..."
   style={{
     width: "100%",
@@ -697,20 +718,20 @@ const response = await fetch(submitEndpoint, {
     borderRadius: "4px",
   }}
 />
+              }
 
-              <button
+              {!session.show_answer && <button
                 type="button"
                 onClick={() => submitAnswer()}
                 disabled={
                   submitting ||
                   submitted ||
                   !answerText.trim() ||
-                  secondsRemaining === 0 ||
-                  session.show_answer
+                  secondsRemaining === 0
                 }
                 style={{
                   background:
-                    submitted || submitting || secondsRemaining === 0 || session.show_answer
+                    submitted || submitting || secondsRemaining === 0
                       ? "#777"
                       : "#111",
                   color: "white",
@@ -718,12 +739,12 @@ const response = await fetch(submitEndpoint, {
                   border: "none",
                   borderRadius: "6px",
                   cursor:
-                    submitted || submitting || secondsRemaining === 0 || session.show_answer
+                    submitted || submitting || secondsRemaining === 0
                       ? "not-allowed"
                       : "pointer",
                   marginRight: "0.5rem",
                   opacity:
-                    submitted || submitting || secondsRemaining === 0 || session.show_answer ? 0.7 : 1,
+                    submitted || submitting || secondsRemaining === 0 ? 0.7 : 1,
                 }}
               >
                 {submitting
@@ -733,12 +754,9 @@ const response = await fetch(submitEndpoint, {
                   : secondsRemaining === 0
                   ? "Time's Up"
                   : "Submit Answer"}
-              </button>
-              </> : rickhouseGame?.game_phase === "angels_question" && !isAngelsSharePlayer ? (
-                <p>Only {rickhousePicker?.display_name ?? "the player who found it"} may answer this Angel’s Share.</p>
-              ) : null}
+              </button>}
             </>
-          ) : !rickhouseGame?.game_phase?.startsWith("cask_strength") ? (
+          ) : !lastCall && !rickhouseGame?.game_phase?.startsWith("cask_strength") ? (
             <p>Waiting for question...</p>
           ) : null}
 

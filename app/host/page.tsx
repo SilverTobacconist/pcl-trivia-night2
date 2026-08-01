@@ -24,13 +24,30 @@ const [startingDoubleCask, setStartingDoubleCask] = useState(false);
 const [rickhouseRoundSecondsRemaining, setRickhouseRoundSecondsRemaining] = useState<number | null>(null);
 const [caskStrengthEntries, setCaskStrengthEntries] = useState<any[]>([]);
 const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([]);
-const [rickhouseAnswersLoaded, setRickhouseAnswersLoaded] = useState(false);
-const [skippingRickhousePicker, setSkippingRickhousePicker] = useState(false);
-const [skipPickerMessage, setSkipPickerMessage] = useState("");
   const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [lastCall, setLastCall] = useState<any>(null);
+  const [lastCallEntries, setLastCallEntries] = useState<any[]>([]);
+  const [selectedLastCallCorrect, setSelectedLastCallCorrect] = useState<string[]>([]);
+  const [lastCallBusy, setLastCallBusy] = useState(false);
+  const [lastCallActionName, setLastCallActionName] = useState("");
+  const [lastCallMessage, setLastCallMessage] = useState("");
+  const [endingLastCall, setEndingLastCall] = useState(false);
+
+  const lastCallButtonStyle = (disabled = false) => ({
+    background: disabled ? "#777" : "#5b3511",
+    color: "#fff",
+    padding: ".75rem 1rem",
+    border: "2px solid rgba(0,0,0,.18)",
+    borderRadius: "7px",
+    cursor: disabled ? "wait" : "pointer",
+    fontWeight: 800,
+    boxShadow: disabled ? "inset 0 2px 4px rgba(0,0,0,.2)" : "0 3px 0 #2f1a08",
+    transform: disabled ? "translateY(2px)" : "none",
+    margin: ".35rem .5rem .35rem 0",
+  } as const);
 
   function formatRoundTime(totalSeconds: number | null) {
     if (totalSeconds === null) return "Not started";
@@ -208,9 +225,6 @@ const [skipPickerMessage, setSkipPickerMessage] = useState("");
 
   async function loadRickhouseAnswers() {
     if (!rickhouseGame?.id) return;
-
-    setError("");
-    setRickhouseAnswersLoaded(false);
   
     const response = await fetch(
       `/api/rickhouse/answers?gameId=${rickhouseGame.id}`
@@ -223,18 +237,13 @@ const [skipPickerMessage, setSkipPickerMessage] = useState("");
       return;
     }
   
-    const loadedAnswers = Array.isArray(data.answers)
-      ? data.answers
-      : [];
-
-    setRickhouseAnswers(loadedAnswers);
-    setActiveRickhousePour(data.pour);
-    setSelectedRickhouseAnswers(
-      loadedAnswers
-        .filter((answer: any) => answer.auto_is_correct)
-        .map((answer: any) => answer.id)
-    );
-    setRickhouseAnswersLoaded(true);
+    setRickhouseAnswers(data.answers);
+setActiveRickhousePour(data.pour);
+setSelectedRickhouseAnswers(
+  data.answers
+    .filter((answer: any) => answer.auto_is_correct)
+    .map((answer: any) => answer.id)
+);
   }
 
   async function continueRickhouse() {
@@ -261,7 +270,6 @@ const [skipPickerMessage, setSkipPickerMessage] = useState("");
   
     await loadRickhouseGame();
     setRickhouseAnswers([]);
-    setRickhouseAnswersLoaded(false);
     setSelectedRickhouseAnswers([]);
     setActiveRickhousePour(null);
     await loadRickhouseScores();
@@ -301,7 +309,6 @@ const [skipPickerMessage, setSkipPickerMessage] = useState("");
       setRickhouseGame(null);
       setRickhousePours([]);
       setRickhouseAnswers([]);
-      setRickhouseAnswersLoaded(false);
       setSelectedRickhouseAnswers([]);
       setActiveRickhousePour(null);
       setRickhouseScores([]);
@@ -408,7 +415,6 @@ setSelectedAnswers([]);
     }
   
     setRickhouseAnswers([]);
-    setRickhouseAnswersLoaded(false);
 setSelectedRickhouseAnswers([]);
 await loadRickhouseGame();
 await loadRickhouseScores(rickhouseGame.id);
@@ -427,33 +433,6 @@ await loadSession();
     if (!response.ok) { setError(data.error || "Could not reveal Rickhouse answer."); return; }
     await loadRickhouseGame();
     await loadSession();
-  }
-
-  async function skipRickhousePicker() {
-    if (!rickhouseGame?.id) return;
-    setError("");
-    setSkipPickerMessage("");
-    setSkippingRickhousePicker(true);
-    try {
-      const response = await fetch("/api/rickhouse/skip-picker", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId: rickhouseGame.id }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setError(data.error || "Could not move to the next picker.");
-        return;
-      }
-      setSkipPickerMessage(
-        data.picker?.display_name
-          ? `Picker moved to ${data.picker.display_name}.`
-          : "Moved to the next picker."
-      );
-      await loadRickhouseGame();
-    } finally {
-      setSkippingRickhousePicker(false);
-    }
   }
 
   async function revealAnswer() {
@@ -484,41 +463,49 @@ setAnswerRevealed(true);
 
   async function endSession() {
     if (!session?.id) return;
-    if (!window.confirm("End this session? Players will no longer be able to join or submit answers.")) return;
+    if (!window.confirm("Begin Last Call? This closes regular trivia and any active Rickhouse game.")) return;
     setError("");
+    await lastCallAction("start");
+  }
 
-    async function sendEndRequest() {
-      const response = await fetch("/api/end-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
-      });
+  async function loadLastCall(sessionIdOverride?: string) {
+    const id = sessionIdOverride || session?.id;
+    if (!id) return;
+    const response = await fetch(`/api/last-call/current?sessionId=${id}&t=${Date.now()}`, { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) { setError(data.error || "Could not load Last Call."); return; }
+    setLastCall(data.game);
+    setLastCallEntries(data.entries || []);
+    if (data.game?.phase === "grading") {
+      setSelectedLastCallCorrect((current) => current.length ? current : (data.entries || []).filter((entry: any) => entry.exact_match).map((entry: any) => entry.id));
+    }
+  }
+
+  async function lastCallAction(action: string, extras: any = {}) {
+    if (!session?.id || lastCallBusy) return;
+    setLastCallBusy(true); setLastCallActionName(action); setLastCallMessage(""); setError("");
+    try {
+      const response = await fetch("/api/last-call/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sessionId: session.id, ...extras }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Last Call action failed.");
+      await loadSession(); await loadLastCall(session.id); await loadScoreboard();
+      const messages: Record<string,string> = { finalize_vote:"Difficulty vote finalized.",show_question:"Wagers locked.  Question displayed.",begin_grading:"Answers closed.  Grading ready.",grade:"Last Call graded.",reveal_next:"Next player revealed.",finalize:"Last Call finalized." };
+      setLastCallMessage(messages[action] || "Last Call updated.");
+    } catch (error: any) { setError(error.message || "Last Call action failed."); }
+    finally { setLastCallBusy(false); setLastCallActionName(""); }
+  }
+
+  async function endAfterLastCall(exportFirst: boolean) {
+    if (endingLastCall) return;
+    setEndingLastCall(true); setError("");
+    try {
+      if (exportFirst) await exportResultsCsv();
+      const response = await fetch("/api/end-session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: session.id }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not end session.");
-      return data.session;
-    }
-
-    try {
-      setSession(await sendEndRequest());
-      setRickhouseGame(null);
-      setRickhousePours([]);
-      setRickhouseAnswers([]);
-      setRickhouseAnswersLoaded(false);
-      setSelectedRickhouseAnswers([]);
-      setActiveRickhousePour(null);
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 750));
-      try {
-        setSession(await sendEndRequest());
-        setRickhouseGame(null);
-        setRickhousePours([]);
-        setRickhouseAnswers([]);
-        setRickhouseAnswersLoaded(false);
-        setSelectedRickhouseAnswers([]);
-        setActiveRickhousePour(null);
-      }
-      catch (error: any) { setError(error.message || "Could not end session after retry."); }
-    }
+      setSession(data.session);
+    } catch (error:any) { setError(error.message || "Could not end session."); }
+    finally { setEndingLastCall(false); }
   }
 
   async function exportResultsCsv() {
@@ -532,20 +519,20 @@ setAnswerRevealed(true);
       return;
     }
 
-    const sessionDate = new Date(session.created_at || Date.now()).toLocaleDateString(
-      "en-US",
-      { timeZone: "America/Chicago", dateStyle: "medium" }
-    );
+    const endedAt = new Date();
+    const sessionDate = endedAt.toLocaleDateString("en-US", { timeZone: "America/Chicago", year:"numeric", month:"long", day:"numeric" });
+    const endTime = endedAt.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour:"numeric", minute:"2-digit", timeZoneName:"short" });
 
     const rows = [
       ["Date", sessionDate],
-      ["Session", session.session_code ?? ""],
+      ["End Time", endTime],
+      ["Session Number", session.session_code ?? ""],
       ["Location", session.location ?? ""],
       ["Host", session.host_name ?? ""],
       [],
       ["Place", "Player", "Score"],
-      ...data.players.map((player: any, index: number) => [
-        index + 1,
+      ...data.players.map((player: any, index: number, all: any[]) => [
+        index > 0 && Number(all[index - 1].score) === Number(player.score) ? all.slice(0, index).findIndex((item: any) => Number(item.score) === Number(player.score)) + 1 : index + 1,
         player.display_name,
         player.score,
       ]),
@@ -729,6 +716,7 @@ await loadSession();
       loadPlayers();
       loadScoreboard();
       loadRickhouseGame();
+      loadLastCall();
 
       if (currentQuestion?.question_id && selectedAnswers.length === 0) {
         loadAnswers();
@@ -910,7 +898,7 @@ await loadSession();
     marginRight: "0.5rem",
   }}
 >
-  End Session
+  Begin Last Call
 </button>
 
 <button
@@ -953,6 +941,21 @@ await loadSession();
   Back
 </button>
           </div>
+
+          {lastCall && (
+            <section style={{ marginTop: "1.5rem", padding: "1rem", border: "2px solid #8a5a00", borderRadius: "10px", background: "#fff8dc", color: "#111" }}>
+              <h2>Last Call</h2>
+              <p><strong>Phase:</strong> {String(lastCall.phase).replaceAll("_", " ")}</p>
+              {lastCallMessage && <p style={{color:"#176b2c",fontWeight:800}}>{lastCallMessage}</p>}
+              {lastCall.selected_difficulty && <p><strong>Final question:</strong> {lastCall.category} / {lastCall.subcategory} / {lastCall.selected_difficulty}</p>}
+              {lastCall.phase === "voting" && <><p>{lastCallEntries.length} player(s) have voted.  Only voters advance.</p><button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("finalize_vote")}>{lastCallActionName==="finalize_vote"?"Finalizing Vote...":"Finalize Difficulty Vote"}</button></>}
+              {lastCall.phase === "wagering" && <><p>{lastCallEntries.filter((entry) => entry.wager !== null).length} of {lastCallEntries.length} wagers submitted.</p><button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("show_question")}>{lastCallActionName==="show_question"?"Locking Wagers...":"Lock Wagers & Show Question"}</button></>}
+              {lastCall.phase === "question" && <><p><strong>Question:</strong> {lastCall.question_text}</p><p>{lastCallEntries.filter((entry) => entry.submitted_answer !== null).length} of {lastCallEntries.length} answers submitted.</p><button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("begin_grading")}>{lastCallActionName==="begin_grading"?"Closing Answers...":"Close Answers & Begin Grading"}</button></>}
+              {lastCall.phase === "grading" && <><p><strong>Question:</strong> {lastCall.question_text}</p><p><strong>Correct answer:</strong> {lastCall.correct_answer}</p>{lastCallEntries.map((entry) => <label key={entry.id} style={{ display: "block", padding: ".35rem" }}><input type="checkbox" checked={selectedLastCallCorrect.includes(entry.id)} onChange={() => setSelectedLastCallCorrect((current) => current.includes(entry.id) ? current.filter((id) => id !== entry.id) : [...current, entry.id])} /> {entry.player_name}: {entry.submitted_answer || "No answer"}</label>)}<button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("grade", { correctEntryIds: selectedLastCallCorrect })}>{lastCallActionName==="grade"?"Grading...":"Grade Last Call"}</button></>}
+              {lastCall.phase === "reveal" && <><p><strong>Correct answer:</strong> {lastCall.correct_answer}</p><ol>{lastCallEntries.map((entry) => <li key={entry.id}>{entry.player_name} — Points before wager: {entry.starting_score} — {entry.is_revealed ? `Answer: ${entry.submitted_answer || "No answer"}, ${entry.is_correct ? "Correct" : "Incorrect"}, wager ${entry.wager}, new total ${entry.final_score}` : "waiting"}</li>)}</ol><button style={lastCallButtonStyle(lastCallBusy || lastCallEntries.every((entry) => entry.is_revealed))} disabled={lastCallBusy || lastCallEntries.every((entry) => entry.is_revealed)} onClick={() => lastCallAction("reveal_next")}>{lastCallActionName==="reveal_next"?"Revealing...":"Reveal Next Player"}</button>{lastCallEntries.length > 0 && lastCallEntries.every((entry) => entry.is_revealed) && <button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("finalize")}>{lastCallActionName==="finalize"?"Finalizing...":"Finalize Last Call"}</button>}</>}
+              {lastCall.phase === "complete" && <><h3>Final session standings are ready.</h3><button style={lastCallButtonStyle(endingLastCall)} disabled={endingLastCall} onClick={() => endAfterLastCall(true)}>{endingLastCall?"Ending Session...":"Export Final Leaderboard & End Session"}</button><button style={lastCallButtonStyle(endingLastCall)} disabled={endingLastCall} onClick={() => endAfterLastCall(false)}>{endingLastCall?"Ending Session...":"End Without Export"}</button></>}
+            </section>
+          )}
 
           <h3 style={{ marginTop: "2rem" }}>Players Joined</h3>
 
@@ -1000,7 +1003,7 @@ await loadSession();
     <p>
       <strong>Status:</strong> {rickhouseGame.status}
     </p>
-{["question", "angels_question", "pour_reveal", "angels_reveal"].includes(rickhouseGame.game_phase) && (
+{["question", "angels_question"].includes(rickhouseGame.game_phase) && (
   <>
     <button
       type="button"
@@ -1021,15 +1024,13 @@ await loadSession();
     <button
       type="button"
       onClick={gradeRickhouseAnswers}
-      disabled={Boolean(activeRickhousePour?.is_graded)}
       style={{
         background: "#005f3c",
         color: "white",
         padding: "0.6rem 1rem",
         border: "none",
         borderRadius: "6px",
-        cursor: activeRickhousePour?.is_graded ? "not-allowed" : "pointer",
-        opacity: activeRickhousePour?.is_graded ? 0.65 : 1,
+        cursor: "pointer",
       }}
     >
       Grade Rickhouse Pour
@@ -1037,7 +1038,7 @@ await loadSession();
   </>
 )}
 
-{["question", "angels_question", "angels_graded", "pour_graded", "angels_reveal", "pour_reveal"].includes(
+{["angels_graded", "pour_graded", "angels_reveal", "pour_reveal"].includes(
   rickhouseGame?.game_phase
 ) && (
   <>
@@ -1065,7 +1066,6 @@ await loadSession();
         : "Reveal Answer"}
     </button>
 
-    {activeRickhousePour?.is_graded && (
     <button
       type="button"
       onClick={continueRickhouse}
@@ -1081,33 +1081,7 @@ await loadSession();
     >
       Continue Rickhouse
     </button>
-    )}
   </>
-)}
-{rickhouseGame.game_phase === "board" && (
-  <button
-    type="button"
-    onClick={skipRickhousePicker}
-    disabled={skippingRickhousePicker}
-    style={{
-      background: "#6b2f1a",
-      color: "white",
-      padding: "0.6rem 1rem",
-      border: "none",
-      borderRadius: "6px",
-      cursor: skippingRickhousePicker ? "wait" : "pointer",
-      opacity: skippingRickhousePicker ? 0.7 : 1,
-      marginRight: "0.5rem",
-      fontWeight: "bold",
-    }}
-  >
-    {skippingRickhousePicker ? "Moving to Next Picker..." : "Skip to Next Picker"}
-  </button>
-)}
-{skipPickerMessage && (
-  <span style={{ marginLeft: "0.75rem", color: "#005f3c", fontWeight: "bold" }}>
-    {skipPickerMessage}
-  </span>
 )}
 <button
   type="button"
@@ -1327,20 +1301,6 @@ await loadSession();
       ))}
     </ul>
   </section>
-)}
-
-{rickhouseAnswersLoaded && rickhouseAnswers.length === 0 && (
-  <p
-    style={{
-      marginTop: "1rem",
-      padding: "0.75rem",
-      border: "1px solid #c28a2e",
-      borderRadius: "6px",
-      background: "#fff8dc",
-    }}
-  >
-    No Rickhouse answers were submitted for this pour.
-  </p>
 )}
 
     <div

@@ -13,18 +13,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // End every active Rickhouse game tied to this session first.  This also
-    // makes the operation safe to retry from the host page.
-    const { error: rickhouseError } = await supabase
-      .from("rickhouse_games")
-      .update({ status: "completed" })
-      .eq("session_id", sessionId)
-      .eq("status", "active");
-
-    if (rickhouseError) {
+    const { data: lastCall } = await supabase.from("last_call_games").select("phase").eq("session_id", sessionId).maybeSingle();
+    if (!lastCall || lastCall.phase !== "complete") {
       return NextResponse.json(
-        { error: rickhouseError.message },
-        { status: 500 }
+        { error: "Last Call must be completed before the session can end." },
+        { status: 400 }
       );
     }
 
@@ -33,7 +26,7 @@ export async function POST(request: Request) {
       .update({
         status: "ended",
         question_status: "closed",
-        game_mode: "main",
+        game_mode: "complete",
         current_question_id: null,
         current_question_text: null,
         current_category: null,

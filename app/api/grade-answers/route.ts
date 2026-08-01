@@ -17,6 +17,28 @@ export async function POST(request: Request) {
       Array.isArray(answerIds) ? answerIds.map(String) : []
     );
 
+    const { data: session, error: sessionError } = await supabase
+      .from("sessions")
+      .select("current_difficulty")
+      .eq("id", sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: "Could not load the question difficulty." },
+        { status: 500 }
+      );
+    }
+
+    const pointsByDifficulty: Record<string, number> = {
+      easy: 1,
+      medium: 2,
+      hard: 3,
+      "extra hard": 5,
+    };
+    const pointValue =
+      pointsByDifficulty[String(session.current_difficulty || "").trim().toLowerCase()] ?? 1;
+
     const { data: answers, error: answersError } = await supabase
       .from("answers")
       .select("id, player_id, is_correct")
@@ -47,7 +69,7 @@ export async function POST(request: Request) {
         .from("answers")
         .update({
           is_correct: isCorrect,
-          points_awarded: isCorrect ? 1 : 0,
+          points_awarded: isCorrect ? pointValue : 0,
         })
         .eq("id", answer.id)
         .is("is_correct", null)
@@ -90,7 +112,7 @@ export async function POST(request: Request) {
 
         const { error: playerUpdateError } = await supabase
           .from("players")
-          .update({ score: (player?.score ?? 0) + 1 })
+          .update({ score: (player?.score ?? 0) + pointValue })
           .eq("id", answer.player_id);
 
         if (playerUpdateError) {
@@ -126,6 +148,7 @@ export async function POST(request: Request) {
       success: true,
       graded: gradedCount,
       alreadyGraded: alreadyGradedCount,
+      pointValue,
     });
   } catch (error: any) {
     return NextResponse.json(
