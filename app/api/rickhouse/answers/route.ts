@@ -56,8 +56,15 @@ if (pourError || !pour) {
     );
   }
 
+  const eligibleAnswers = pour.is_angels_share
+    ? (answers || []).filter(
+        (answer) =>
+          answer.player_id === game.angels_share_player_id
+      )
+    : answers || [];
+
   const playerIds = Array.from(
-    new Set((answers || []).map((answer) => answer.player_id))
+    new Set(eligibleAnswers.map((answer) => answer.player_id))
   );
   
   const { data: players } = await supabase
@@ -76,12 +83,12 @@ if (pourError || !pour) {
       const correctAnswers = [
         pour.correct_answer,
         ...(pour.answer_aliases || "")
-          .split("|")
+          .split(/[;,|]/)
           .map((alias: string) => alias.trim())
           .filter(Boolean),
       ].map(normalize);
       
-      const answersWithPlayers = (answers || []).map((answer) => {
+      const answersWithPlayers = eligibleAnswers.map((answer) => {
         const player = players?.find((player) => player.id === answer.player_id);
         const submitted = normalize(answer.submitted_answer || "");
       

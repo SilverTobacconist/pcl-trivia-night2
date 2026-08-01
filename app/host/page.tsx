@@ -24,6 +24,9 @@ const [startingDoubleCask, setStartingDoubleCask] = useState(false);
 const [rickhouseRoundSecondsRemaining, setRickhouseRoundSecondsRemaining] = useState<number | null>(null);
 const [caskStrengthEntries, setCaskStrengthEntries] = useState<any[]>([]);
 const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([]);
+const [rickhouseAnswersLoaded, setRickhouseAnswersLoaded] = useState(false);
+const [skippingRickhousePicker, setSkippingRickhousePicker] = useState(false);
+const [skipPickerMessage, setSkipPickerMessage] = useState("");
   const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [answerRevealed, setAnswerRevealed] = useState(false);
@@ -205,6 +208,9 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
 
   async function loadRickhouseAnswers() {
     if (!rickhouseGame?.id) return;
+
+    setError("");
+    setRickhouseAnswersLoaded(false);
   
     const response = await fetch(
       `/api/rickhouse/answers?gameId=${rickhouseGame.id}`
@@ -217,13 +223,18 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
       return;
     }
   
-    setRickhouseAnswers(data.answers);
-setActiveRickhousePour(data.pour);
-setSelectedRickhouseAnswers(
-  data.answers
-    .filter((answer: any) => answer.auto_is_correct)
-    .map((answer: any) => answer.id)
-);
+    const loadedAnswers = Array.isArray(data.answers)
+      ? data.answers
+      : [];
+
+    setRickhouseAnswers(loadedAnswers);
+    setActiveRickhousePour(data.pour);
+    setSelectedRickhouseAnswers(
+      loadedAnswers
+        .filter((answer: any) => answer.auto_is_correct)
+        .map((answer: any) => answer.id)
+    );
+    setRickhouseAnswersLoaded(true);
   }
 
   async function continueRickhouse() {
@@ -250,6 +261,7 @@ setSelectedRickhouseAnswers(
   
     await loadRickhouseGame();
     setRickhouseAnswers([]);
+    setRickhouseAnswersLoaded(false);
     setSelectedRickhouseAnswers([]);
     setActiveRickhousePour(null);
     await loadRickhouseScores();
@@ -289,6 +301,7 @@ setSelectedRickhouseAnswers(
       setRickhouseGame(null);
       setRickhousePours([]);
       setRickhouseAnswers([]);
+      setRickhouseAnswersLoaded(false);
       setSelectedRickhouseAnswers([]);
       setActiveRickhousePour(null);
       setRickhouseScores([]);
@@ -395,6 +408,7 @@ setSelectedAnswers([]);
     }
   
     setRickhouseAnswers([]);
+    setRickhouseAnswersLoaded(false);
 setSelectedRickhouseAnswers([]);
 await loadRickhouseGame();
 await loadRickhouseScores(rickhouseGame.id);
@@ -413,6 +427,33 @@ await loadSession();
     if (!response.ok) { setError(data.error || "Could not reveal Rickhouse answer."); return; }
     await loadRickhouseGame();
     await loadSession();
+  }
+
+  async function skipRickhousePicker() {
+    if (!rickhouseGame?.id) return;
+    setError("");
+    setSkipPickerMessage("");
+    setSkippingRickhousePicker(true);
+    try {
+      const response = await fetch("/api/rickhouse/skip-picker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId: rickhouseGame.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error || "Could not move to the next picker.");
+        return;
+      }
+      setSkipPickerMessage(
+        data.picker?.display_name
+          ? `Picker moved to ${data.picker.display_name}.`
+          : "Moved to the next picker."
+      );
+      await loadRickhouseGame();
+    } finally {
+      setSkippingRickhousePicker(false);
+    }
   }
 
   async function revealAnswer() {
@@ -459,9 +500,23 @@ setAnswerRevealed(true);
 
     try {
       setSession(await sendEndRequest());
+      setRickhouseGame(null);
+      setRickhousePours([]);
+      setRickhouseAnswers([]);
+      setRickhouseAnswersLoaded(false);
+      setSelectedRickhouseAnswers([]);
+      setActiveRickhousePour(null);
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 750));
-      try { setSession(await sendEndRequest()); }
+      try {
+        setSession(await sendEndRequest());
+        setRickhouseGame(null);
+        setRickhousePours([]);
+        setRickhouseAnswers([]);
+        setRickhouseAnswersLoaded(false);
+        setSelectedRickhouseAnswers([]);
+        setActiveRickhousePour(null);
+      }
       catch (error: any) { setError(error.message || "Could not end session after retry."); }
     }
   }
@@ -477,29 +532,19 @@ setAnswerRevealed(true);
       return;
     }
 
-    const sessionDate = session.created_at
-      ? new Date(session.created_at).toLocaleString("en-US", {
-          timeZone: "America/Chicago",
-          dateStyle: "medium",
-          timeStyle: "short",
-        })
-      : "Unknown date";
+    const sessionDate = new Date(session.created_at || Date.now()).toLocaleDateString(
+      "en-US",
+      { timeZone: "America/Chicago", dateStyle: "medium" }
+    );
 
     const rows = [
-      [
-        "Date",
-        "Session Number",
-        "Location",
-        "Host",
-        "Place",
-        "Player",
-        "Score",
-      ],
+      ["Date", sessionDate],
+      ["Session", session.session_code ?? ""],
+      ["Location", session.location ?? ""],
+      ["Host", session.host_name ?? ""],
+      [],
+      ["Place", "Player", "Score"],
       ...data.players.map((player: any, index: number) => [
-        sessionDate,
-        session.session_code ?? "",
-        session.location ?? "",
-        session.host_name ?? "",
         index + 1,
         player.display_name,
         player.score,
@@ -955,7 +1000,7 @@ await loadSession();
     <p>
       <strong>Status:</strong> {rickhouseGame.status}
     </p>
-{["question", "angels_question"].includes(rickhouseGame.game_phase) && (
+{["question", "angels_question", "pour_reveal", "angels_reveal"].includes(rickhouseGame.game_phase) && (
   <>
     <button
       type="button"
@@ -976,13 +1021,15 @@ await loadSession();
     <button
       type="button"
       onClick={gradeRickhouseAnswers}
+      disabled={Boolean(activeRickhousePour?.is_graded)}
       style={{
         background: "#005f3c",
         color: "white",
         padding: "0.6rem 1rem",
         border: "none",
         borderRadius: "6px",
-        cursor: "pointer",
+        cursor: activeRickhousePour?.is_graded ? "not-allowed" : "pointer",
+        opacity: activeRickhousePour?.is_graded ? 0.65 : 1,
       }}
     >
       Grade Rickhouse Pour
@@ -990,7 +1037,7 @@ await loadSession();
   </>
 )}
 
-{["angels_graded", "pour_graded", "angels_reveal", "pour_reveal"].includes(
+{["question", "angels_question", "angels_graded", "pour_graded", "angels_reveal", "pour_reveal"].includes(
   rickhouseGame?.game_phase
 ) && (
   <>
@@ -1018,6 +1065,7 @@ await loadSession();
         : "Reveal Answer"}
     </button>
 
+    {activeRickhousePour?.is_graded && (
     <button
       type="button"
       onClick={continueRickhouse}
@@ -1033,7 +1081,33 @@ await loadSession();
     >
       Continue Rickhouse
     </button>
+    )}
   </>
+)}
+{rickhouseGame.game_phase === "board" && (
+  <button
+    type="button"
+    onClick={skipRickhousePicker}
+    disabled={skippingRickhousePicker}
+    style={{
+      background: "#6b2f1a",
+      color: "white",
+      padding: "0.6rem 1rem",
+      border: "none",
+      borderRadius: "6px",
+      cursor: skippingRickhousePicker ? "wait" : "pointer",
+      opacity: skippingRickhousePicker ? 0.7 : 1,
+      marginRight: "0.5rem",
+      fontWeight: "bold",
+    }}
+  >
+    {skippingRickhousePicker ? "Moving to Next Picker..." : "Skip to Next Picker"}
+  </button>
+)}
+{skipPickerMessage && (
+  <span style={{ marginLeft: "0.75rem", color: "#005f3c", fontWeight: "bold" }}>
+    {skipPickerMessage}
+  </span>
 )}
 <button
   type="button"
@@ -1253,6 +1327,20 @@ await loadSession();
       ))}
     </ul>
   </section>
+)}
+
+{rickhouseAnswersLoaded && rickhouseAnswers.length === 0 && (
+  <p
+    style={{
+      marginTop: "1rem",
+      padding: "0.75rem",
+      border: "1px solid #c28a2e",
+      borderRadius: "6px",
+      background: "#fff8dc",
+    }}
+  >
+    No Rickhouse answers were submitted for this pour.
+  </p>
 )}
 
     <div

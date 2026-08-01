@@ -9,7 +9,10 @@ export async function POST(request: Request) {
     const correctAnswerIds = body.correctAnswerIds ?? [];
 
     if (!gameId) {
-      return NextResponse.json({ error: "gameId is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "gameId is required." },
+        { status: 400 }
+      );
     }
 
     const { data: game, error: gameError } = await supabase
@@ -19,7 +22,10 @@ export async function POST(request: Request) {
       .single();
 
     if (gameError || !game) {
-      return NextResponse.json({ error: "Rickhouse game not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Rickhouse game not found." },
+        { status: 404 }
+      );
     }
 
     const { data: pour, error: pourError } = await supabase
@@ -29,7 +35,10 @@ export async function POST(request: Request) {
       .single();
 
     if (pourError || !pour) {
-      return NextResponse.json({ error: "Pour not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Pour not found." },
+        { status: 404 }
+      );
     }
 
     if (pour.is_graded) {
@@ -47,10 +56,14 @@ export async function POST(request: Request) {
       .order("response_time_ms", { ascending: true });
 
     if (answersError) {
-      return NextResponse.json({ error: answersError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: answersError.message },
+        { status: 500 }
+      );
     }
 
-    const isAngelsShare = game.game_phase === "angels_question";
+    const isAngelsShare = pour.is_angels_share;
+
     const pointValue = isAngelsShare
       ? Number(game.angels_share_wager || 0)
       : Number(pour.point_value || 0);
@@ -60,10 +73,19 @@ export async function POST(request: Request) {
         ? game.current_picker_player_id
         : game.current_picker_player_id?.id ?? null;
 
-    const fastestCorrectAnswer =
-      answers?.find((answer) => correctAnswerIds.includes(answer.id)) ?? null;
+    const eligibleAnswers = isAngelsShare
+      ? (answers || []).filter(
+          (answer) =>
+            answer.player_id === game.angels_share_player_id
+        )
+      : answers || [];
 
-    for (const answer of answers || []) {
+    const fastestCorrectAnswer =
+      eligibleAnswers.find((answer) =>
+        correctAnswerIds.includes(answer.id)
+      ) ?? null;
+
+    for (const answer of eligibleAnswers) {
       const isCorrect = correctAnswerIds.includes(answer.id);
       const pointsAwarded = isCorrect ? pointValue : -pointValue;
 
@@ -85,7 +107,9 @@ export async function POST(request: Request) {
       if (existingScore) {
         await supabase
           .from("rickhouse_scores")
-          .update({ score: existingScore.score + pointsAwarded })
+          .update({
+            score: existingScore.score + pointsAwarded,
+          })
           .eq("id", existingScore.id);
       } else {
         await supabase.from("rickhouse_scores").insert({
@@ -102,14 +126,21 @@ export async function POST(request: Request) {
     }
 
     const angelsShareAnswer = isAngelsShare
-      ? answers?.find((answer) => answer.player_id === game.angels_share_player_id)
+      ? eligibleAnswers.find(
+          (answer) =>
+            answer.player_id === game.angels_share_player_id
+        )
       : null;
 
     const angelsShareWasCorrect = angelsShareAnswer
       ? correctAnswerIds.includes(angelsShareAnswer.id)
       : false;
 
-    if (isAngelsShare && !angelsShareAnswer && game.angels_share_player_id) {
+    if (
+      isAngelsShare &&
+      !angelsShareAnswer &&
+      game.angels_share_player_id
+    ) {
       const { data: existingScore } = await supabase
         .from("rickhouse_scores")
         .select("*")
@@ -120,7 +151,9 @@ export async function POST(request: Request) {
       if (existingScore) {
         await supabase
           .from("rickhouse_scores")
-          .update({ score: existingScore.score - pointValue })
+          .update({
+            score: existingScore.score - pointValue,
+          })
           .eq("id", existingScore.id);
       } else {
         await supabase.from("rickhouse_scores").insert({
@@ -137,17 +170,30 @@ export async function POST(request: Request) {
       .update({ is_graded: true })
       .eq("id", pour.id);
 
+    const revealedBeforeGrading =
+      game.game_phase === "angels_reveal" ||
+      game.game_phase === "pour_reveal";
+
+    const nextGamePhase = revealedBeforeGrading
+      ? game.game_phase
+      : isAngelsShare
+        ? "angels_graded"
+        : "pour_graded";
+
     await supabase
       .from("rickhouse_games")
       .update({
         current_picker_player_id: nextPickerPlayerId,
         current_pour_id: game.current_pour_id,
-        game_phase: isAngelsShare ? "angels_graded" : "pour_graded",
+        game_phase: nextGamePhase,
         angels_share_result: isAngelsShare
           ? JSON.stringify({
-              answer: angelsShareAnswer?.submitted_answer ?? "No answer",
+              answer:
+                angelsShareAnswer?.submitted_answer ?? "No answer",
               isCorrect: angelsShareWasCorrect,
-              pointsAwarded: angelsShareWasCorrect ? pointValue : -pointValue,
+              pointsAwarded: angelsShareWasCorrect
+                ? pointValue
+                : -pointValue,
             })
           : null,
         last_pour_result: !isAngelsShare
@@ -155,7 +201,8 @@ export async function POST(request: Request) {
               correctAnswer: pour.correct_answer,
               pointValue: pour.point_value,
               nextPickerPlayerId,
-              fastestCorrectPlayerId: fastestCorrectAnswer?.player_id ?? null,
+              fastestCorrectPlayerId:
+                fastestCorrectAnswer?.player_id ?? null,
             })
           : null,
       })
@@ -164,7 +211,7 @@ export async function POST(request: Request) {
     await supabase
       .from("sessions")
       .update({
-        question_status: isAngelsShare ? "angels_graded" : "pour_graded",
+        question_status: nextGamePhase,
         game_mode: "rickhouse",
       })
       .eq("id", game.session_id);
@@ -172,8 +219,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       nextPickerPlayerId,
-      graded: answers?.length ?? 0,
-      gamePhase: isAngelsShare ? "angels_graded" : "pour_graded",
+      graded: eligibleAnswers.length,
+      gamePhase: nextGamePhase,
     });
   } catch (error: any) {
     return NextResponse.json(

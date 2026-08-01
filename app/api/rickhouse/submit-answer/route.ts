@@ -59,7 +59,43 @@ export async function POST(request: Request) {
 
     if (pour.question_id !== questionId) {
       return NextResponse.json(
-        { error: "Submitted question does not match active Rickhouse pour." },
+        {
+          error:
+            "Submitted question does not match active Rickhouse pour.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      game.game_phase === "angels_question" &&
+      game.angels_share_player_id !== playerId
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Only the player who found the Angel's Share may answer.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (game.game_phase === "angels_wager") {
+      return NextResponse.json(
+        {
+          error:
+            "The Angel's Share wager must be submitted before answering.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      game.game_phase === "pour_reveal" ||
+      game.game_phase === "angels_reveal"
+    ) {
+      return NextResponse.json(
+        { error: "The answer has already been revealed." },
         { status: 400 }
       );
     }
@@ -78,7 +114,10 @@ export async function POST(request: Request) {
 
       if (existingAnswer) {
         return NextResponse.json(
-          { error: "You already submitted an answer for this pour." },
+          {
+            error:
+              "You already submitted an answer for this pour.",
+          },
           { status: 400 }
         );
       }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("sessionId");
@@ -40,5 +42,8 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.json({ session, player });
+  return NextResponse.json(
+    { session, player },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

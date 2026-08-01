@@ -38,7 +38,7 @@ const caskAutoSubmittedRef = useRef("");
     const activeSessionId = sessionIdOverride || session?.id;
     if (!activeSessionId) return;
 
-    const response = await fetch(`/api/scoreboard?sessionId=${activeSessionId}`);
+    const response = await fetch(`/api/scoreboard?sessionId=${activeSessionId}&t=${Date.now()}`, { cache: "no-store" });
     const data = await response.json();
 
     if (!response.ok) {
@@ -122,7 +122,8 @@ if (data.game?.cask_strength_ends_at) {
     localStorage.setItem("pcl_player_id", playerId);
 
     const response = await fetch(
-      `/api/player-game?sessionId=${sessionId}&playerId=${playerId}`
+      `/api/player-game?sessionId=${sessionId}&playerId=${playerId}&t=${Date.now()}`,
+      { cache: "no-store" }
     );
 
     const data = await response.json();
@@ -141,7 +142,11 @@ if (data.game?.cask_strength_ends_at) {
     await loadScoreboard(data.session.id);
     await loadRickhouseState(data.session.id, data.player.id);
 
-    if (newQuestionId !== previousQuestionId) {
+    // Ignore brief polling snapshots where the server has temporarily cleared
+    // the question.  Treating null as a new question used to erase an answer
+    // that the player was still typing, then erase it again when the same
+    // question reappeared on the next poll.
+    if (newQuestionId && newQuestionId !== previousQuestionId) {
       currentQuestionIdRef.current = newQuestionId;
       autoSubmittedQuestionIdRef.current = null;
       setSubmitted(false);
@@ -168,10 +173,19 @@ if (data.game?.cask_strength_ends_at) {
     setSubmitting(true);
 
     try {
-      const submitEndpoint =
-  session.game_mode === "rickhouse"
-    ? "/api/rickhouse/submit-answer"
-    : "/api/submit-answer";
+      // The active Rickhouse game is the authoritative signal.  The session
+      // row can briefly be stale on a player's device immediately after the
+      // host starts Rickhouse, which previously sent valid submissions to the
+      // regular trivia answers table.
+      const isRickhouseQuestion =
+        Boolean(rickhouseGame?.id) &&
+        ["question", "angels_question"].includes(
+          rickhouseGame?.game_phase
+        );
+
+      const submitEndpoint = isRickhouseQuestion
+        ? "/api/rickhouse/submit-answer"
+        : "/api/submit-answer";
 
 const response = await fetch(submitEndpoint, {
         method: "POST",
@@ -645,13 +659,31 @@ const response = await fetch(submitEndpoint, {
                 {session.current_question_text}
               </div>
 
+              {session.show_answer && (
+                <div
+                  style={{
+                    border: "2px solid #c28a2e",
+                    background: "#fff8dc",
+                    color: "#111111",
+                    padding: "1rem",
+                    borderRadius: "8px",
+                    marginBottom: "1rem",
+                    fontSize: "1.25rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Answer: {session.current_answer}
+                </div>
+              )}
+
+              {!(rickhouseGame?.game_phase === "angels_question" && !isAngelsSharePlayer) && !session.show_answer ? <>
               <textarea
   value={answerText}
   onChange={(event) => {
     setAnswerText(event.target.value);
     answerTextRef.current = event.target.value;
   }}
-  disabled={submitted || submitting || secondsRemaining === 0}
+  disabled={submitted || submitting || secondsRemaining === 0 || session.show_answer}
   placeholder="Type your answer..."
   style={{
     width: "100%",
@@ -673,11 +705,12 @@ const response = await fetch(submitEndpoint, {
                   submitting ||
                   submitted ||
                   !answerText.trim() ||
-                  secondsRemaining === 0
+                  secondsRemaining === 0 ||
+                  session.show_answer
                 }
                 style={{
                   background:
-                    submitted || submitting || secondsRemaining === 0
+                    submitted || submitting || secondsRemaining === 0 || session.show_answer
                       ? "#777"
                       : "#111",
                   color: "white",
@@ -685,12 +718,12 @@ const response = await fetch(submitEndpoint, {
                   border: "none",
                   borderRadius: "6px",
                   cursor:
-                    submitted || submitting || secondsRemaining === 0
+                    submitted || submitting || secondsRemaining === 0 || session.show_answer
                       ? "not-allowed"
                       : "pointer",
                   marginRight: "0.5rem",
                   opacity:
-                    submitted || submitting || secondsRemaining === 0 ? 0.7 : 1,
+                    submitted || submitting || secondsRemaining === 0 || session.show_answer ? 0.7 : 1,
                 }}
               >
                 {submitting
@@ -701,6 +734,9 @@ const response = await fetch(submitEndpoint, {
                   ? "Time's Up"
                   : "Submit Answer"}
               </button>
+              </> : rickhouseGame?.game_phase === "angels_question" && !isAngelsSharePlayer ? (
+                <p>Only {rickhousePicker?.display_name ?? "the player who found it"} may answer this Angel’s Share.</p>
+              ) : null}
             </>
           ) : !rickhouseGame?.game_phase?.startsWith("cask_strength") ? (
             <p>Waiting for question...</p>
