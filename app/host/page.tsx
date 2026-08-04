@@ -35,29 +35,14 @@ const [selectedCaskCorrectIds, setSelectedCaskCorrectIds] = useState<string[]>([
   const [lastCallActionName, setLastCallActionName] = useState("");
   const [lastCallMessage, setLastCallMessage] = useState("");
   const [endingLastCall, setEndingLastCall] = useState(false);
-  const [hostAction, setHostAction] = useState("");
-
-  async function runHostAction(name: string, action: () => Promise<any>) {
-    if (hostAction) return;
-    setHostAction(name);
-    try {
-      await action();
-    } catch (error: any) {
-      setError(error.message || "The request could not reach the server.  Please try again.");
-    } finally {
-      setHostAction("");
-    }
-  }
-
-  useEffect(() => {
-    if (!lastCallMessage) return;
-
-    const timeout = window.setTimeout(() => {
-      setLastCallMessage("");
-    }, 5000);
-
-    return () => window.clearTimeout(timeout);
-  }, [lastCallMessage]);
+  const [agingRoom, setAgingRoom] = useState<any>(null);
+  const [agingPlayers, setAgingPlayers] = useState<any[]>([]);
+  const [agingAnswers, setAgingAnswers] = useState<any[]>([]);
+  const [agingSelectedPlayers, setAgingSelectedPlayers] = useState<string[]>([]);
+  const [agingCorrectAnswers, setAgingCorrectAnswers] = useState<string[]>([]);
+  const [agingBusy, setAgingBusy] = useState("");
+  const [agingMessage, setAgingMessage] = useState("");
+  const [returningFromRickhouse, setReturningFromRickhouse] = useState(false);
 
   const lastCallButtonStyle = (disabled = false) => ({
     background: disabled ? "#777" : "#5b3511",
@@ -322,16 +307,11 @@ setSelectedRickhouseAnswers(
     const activeSessionId = sessionIdOverride || session?.id;
     if (!activeSessionId) return;
   
-    let response: Response;
-    let data: any;
-    try {
-      response = await fetch(`/api/rickhouse/current?sessionId=${activeSessionId}`);
-      data = await response.json();
-    } catch {
-      // Development previews occasionally restart their server.  Keep the
-      // current game on screen and let the next poll reconnect quietly.
-      return;
-    }
+    const response = await fetch(
+      `/api/rickhouse/current?sessionId=${activeSessionId}`
+    );
+  
+    const data = await response.json();
   
     if (!response.ok) {
       setRickhouseGame(null);
@@ -496,6 +476,36 @@ setAnswerRevealed(true);
     await lastCallAction("start");
   }
 
+  async function loadAgingRoom(sessionIdOverride?: string) {
+    const id = sessionIdOverride || session?.id;
+    if (!id) return;
+    const response = await fetch(`/api/aging-room/current?sessionId=${id}&t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    setAgingRoom(data.game);
+    setAgingPlayers(data.players || []);
+    setAgingAnswers(data.answers || []);
+    if (data.game?.phase === "setup") setAgingSelectedPlayers((data.players || []).filter((p: any) => p.status === "selected").map((p: any) => p.player_id));
+    if (["question", "bale_question"].includes(data.game?.phase)) {
+      const exactIds = (data.answers || []).filter((answer: any) => answer.exact_match && answer.competitive).map((answer: any) => answer.id);
+      setAgingCorrectAnswers((current) => Array.from(new Set([...current, ...exactIds])));
+    }
+  }
+
+  async function agingAction(action: string, extras: any = {}) {
+    if (!session?.id || agingBusy) return;
+    setAgingBusy(action); setAgingMessage(""); setError("");
+    try {
+      const response = await fetch("/api/aging-room/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sessionId: session.id, ...extras }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Aging Room action failed.");
+      setAgingCorrectAnswers([]);
+      await loadAgingRoom(session.id); await loadSession(); await loadPlayers(); await loadScoreboard();
+      setAgingMessage(action === "grade" ? "Question graded." : action === "retry" ? "Second attempts are open." : "Aging Room updated.");
+    } catch (error: any) { setError(error.message || "Aging Room action failed."); }
+    finally { setAgingBusy(""); }
+  }
+
   async function loadLastCall(sessionIdOverride?: string) {
     const id = sessionIdOverride || session?.id;
     if (!id) return;
@@ -536,14 +546,30 @@ setAnswerRevealed(true);
     finally { setEndingLastCall(false); }
   }
 
+  async function returnFromRickhouse() {
+    if (!rickhouseGame?.id || returningFromRickhouse) return;
+    setReturningFromRickhouse(true); setError("");
+    try {
+      const response = await fetch("/api/rickhouse/close", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gameId: rickhouseGame.id }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not return to main trivia.");
+      setRickhouseGame(null); await loadSession(); await loadPlayers(); await loadScoreboard();
+    } catch (error: any) { setError(error.message || "Could not return to main trivia."); }
+    finally { setReturningFromRickhouse(false); }
+  }
+
   async function exportResultsCsv() {
     if (!session?.id) return;
 
-    const response = await fetch(`/api/scoreboard?sessionId=${session.id}`);
-    const data = await response.json();
+    const [scoreResponse, gameResponse] = await Promise.all([
+      fetch(`/api/scoreboard?sessionId=${session.id}`),
+      fetch(`/api/game-results?sessionId=${session.id}`),
+    ]);
+    const data = await scoreResponse.json();
+    const gameData = await gameResponse.json();
 
-    if (!response.ok) {
-      setError(data.error || "Could not export results.");
+    if (!scoreResponse.ok || !gameResponse.ok) {
+      setError(data.error || gameData.error || "Could not export results.");
       return;
     }
 
@@ -551,6 +577,13 @@ setAnswerRevealed(true);
     const sessionDate = endedAt.toLocaleDateString("en-US", { timeZone: "America/Chicago", year:"numeric", month:"long", day:"numeric" });
     const endTime = endedAt.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour:"numeric", minute:"2-digit", timeZoneName:"short" });
 
+    const games = gameData.games || [];
+    const gameHeaders = games.map((game: any) => `${game.game_type === "rickhouse" ? "Rickhouse" : "Aging Room"} #${game.game_number}`);
+    const ordinal = (place: number) => {
+      const mod100 = place % 100;
+      if (mod100 >= 11 && mod100 <= 13) return `${place}th`;
+      return `${place}${place % 10 === 1 ? "st" : place % 10 === 2 ? "nd" : place % 10 === 3 ? "rd" : "th"}`;
+    };
     const rows = [
       ["Date", sessionDate],
       ["End Time", endTime],
@@ -558,11 +591,15 @@ setAnswerRevealed(true);
       ["Location", session.location ?? ""],
       ["Host", session.host_name ?? ""],
       [],
-      ["Place", "Player", "Score"],
+      ["Place", "Player", "Score", ...gameHeaders],
       ...data.players.map((player: any, index: number, all: any[]) => [
         index > 0 && Number(all[index - 1].score) === Number(player.score) ? all.slice(0, index).findIndex((item: any) => Number(item.score) === Number(player.score)) + 1 : index + 1,
         player.display_name,
         player.score,
+        ...games.map((game: any) => {
+          const placement = (game.placements || []).find((item: any) => item.player_id === player.id);
+          return placement?.place ? ordinal(Number(placement.place)) : "";
+        }),
       ]),
     ];
 
@@ -589,6 +626,18 @@ setAnswerRevealed(true);
 
     URL.revokeObjectURL(url);
   }
+
+  useEffect(() => {
+    if (!agingMessage) return;
+    const timer = window.setTimeout(() => setAgingMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [agingMessage]);
+
+  useEffect(() => {
+    if (!lastCallMessage) return;
+    const timer = window.setTimeout(() => setLastCallMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [lastCallMessage]);
 
   async function loadNextQuestion() {
     if (!session?.id) return;
@@ -741,16 +790,15 @@ await loadSession();
     if (!session?.id) return;
 
     const interval = setInterval(() => {
-      void Promise.allSettled([
-        loadPlayers(),
-        loadScoreboard(),
-        loadRickhouseGame(),
-        loadLastCall(),
-        currentQuestion?.question_id && selectedAnswers.length === 0
-          ? loadAnswers()
-          : Promise.resolve(),
-      ]);
+      loadPlayers();
+      loadScoreboard();
+      loadRickhouseGame();
+      loadLastCall();
+      loadAgingRoom();
 
+      if (currentQuestion?.question_id && selectedAnswers.length === 0) {
+        loadAnswers();
+      }
     }, 5000);
 
     return () => clearInterval(interval);
@@ -870,14 +918,13 @@ await loadSession();
           </p>
 
           <div style={{ marginTop: "1rem" }}>
-          <button disabled={Boolean(hostAction)} onClick={() => runHostAction("players", loadPlayers)} style={{ background: "#333", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  {hostAction === "players" ? "Refreshing..." : "Refresh Players"}
+          <button onClick={loadPlayers} style={{ background: "#333", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  Refresh Players
 </button>
 
-{!rickhouseGame && session.status === "active" && (
+{!rickhouseGame && !agingRoom && !lastCall && session.status === "active" && (
 <button
-  onClick={() => runHostAction("rickhouse", startRickhouseTrivia)}
-  disabled={Boolean(hostAction)}
+  onClick={startRickhouseTrivia}
   style={{
     background: "#5b3511",
     color: "white",
@@ -888,17 +935,23 @@ await loadSession();
     marginRight: "0.5rem",
   }}
 >
-  {hostAction === "rickhouse" ? "Starting..." : "Start Rickhouse Trivia"}
+  Start Rickhouse Trivia
 </button>
 )}
 
-<button disabled={Boolean(hostAction)} onClick={() => runHostAction("answers", loadAnswers)} style={{ background: "#444", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  {hostAction === "answers" ? "Loading..." : "Load Answers"}
+{!rickhouseGame && !lastCall && !agingRoom && session.status === "active" && (
+<button onClick={() => agingAction("setup")} disabled={Boolean(agingBusy)} style={{ background: agingBusy ? "#777" : "#6b3f22", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: agingBusy ? "wait" : "pointer", marginRight: "0.5rem" }}>
+  {agingBusy === "setup" ? "Opening Aging Room..." : "Start The Aging Room"}
+</button>
+)}
+
+<button onClick={loadAnswers} style={{ background: "#444", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  Load Answers
 </button>
 
 <button
-  onClick={() => runHostAction("reveal", revealAnswer)}
-  disabled={answerRevealed || Boolean(hostAction)}
+  onClick={revealAnswer}
+  disabled={answerRevealed}
   style={{
     background: answerRevealed ? "#666" : "#8a5a00",
     color: "white",
@@ -910,32 +963,31 @@ await loadSession();
     opacity: answerRevealed ? 0.7 : 1,
   }}
 >
-  {hostAction === "reveal" ? "Revealing..." : answerRevealed ? "Answer Revealed" : "Reveal Answer"}
+  {answerRevealed ? "Answer Revealed" : "Reveal Answer"}
 </button>
 
-<button disabled={Boolean(hostAction)} onClick={() => runHostAction("next", loadNextQuestion)} style={{ background: "#111", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  {hostAction === "next" ? "Loading..." : "Next Question"}
+<button onClick={loadNextQuestion} style={{ background: "#111", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  Next Question
 </button>
 
 <button
-  onClick={() => runHostAction("last-call", endSession)}
-  disabled={Boolean(hostAction)}
+  onClick={endSession}
+  disabled={Boolean(agingRoom)}
   style={{
-    background: "#8a0000",
+    background: agingRoom ? "#777" : "#8a0000",
     color: "white",
     padding: "0.6rem 1rem",
     border: "none",
     borderRadius: "6px",
-    cursor: "pointer",
+    cursor: agingRoom ? "not-allowed" : "pointer",
     marginRight: "0.5rem",
   }}
 >
-  {hostAction === "last-call" ? "Beginning..." : "Begin Last Call"}
+  {agingRoom ? "Finish Aging Room Before Last Call" : "Begin Last Call"}
 </button>
 
 <button
-  onClick={() => runHostAction("export", exportResultsCsv)}
-  disabled={Boolean(hostAction)}
+  onClick={exportResultsCsv}
   style={{
     background: "#005f3c",
     color: "white",
@@ -946,11 +998,11 @@ await loadSession();
     marginRight: "0.5rem",
   }}
 >
-  {hostAction === "export" ? "Exporting..." : "Export Results"}
+  Export Results
 </button>
 
-<button disabled={Boolean(hostAction)} onClick={() => runHostAction("scoreboard", loadScoreboard)} style={{ background: "#555", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
-  {hostAction === "scoreboard" ? "Loading..." : "Load Scoreboard"}
+<button onClick={loadScoreboard} style={{ background: "#555", color: "white", padding: "0.6rem 1rem", border: "none", borderRadius: "6px", cursor: "pointer", marginRight: "0.5rem" }}>
+  Load Scoreboard
 </button>
 
 <button
@@ -987,6 +1039,36 @@ await loadSession();
               {lastCall.phase === "grading" && <><p><strong>Question:</strong> {lastCall.question_text}</p><p><strong>Correct answer:</strong> {lastCall.correct_answer}</p>{lastCallEntries.map((entry) => <label key={entry.id} style={{ display: "block", padding: ".35rem" }}><input type="checkbox" checked={selectedLastCallCorrect.includes(entry.id)} onChange={() => setSelectedLastCallCorrect((current) => current.includes(entry.id) ? current.filter((id) => id !== entry.id) : [...current, entry.id])} /> {entry.player_name}: {entry.submitted_answer || "No answer"}</label>)}<button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("grade", { correctEntryIds: selectedLastCallCorrect })}>{lastCallActionName==="grade"?"Grading...":"Grade Last Call"}</button></>}
               {lastCall.phase === "reveal" && <><p><strong>Correct answer:</strong> {lastCall.correct_answer}</p><ol>{lastCallEntries.map((entry) => <li key={entry.id}>{entry.player_name} — Points before wager: {entry.starting_score} — {entry.is_revealed ? `Answer: ${entry.submitted_answer || "No answer"}, ${entry.is_correct ? "Correct" : "Incorrect"}, wager ${entry.wager}, new total ${entry.final_score}` : "waiting"}</li>)}</ol><button style={lastCallButtonStyle(lastCallBusy || lastCallEntries.every((entry) => entry.is_revealed))} disabled={lastCallBusy || lastCallEntries.every((entry) => entry.is_revealed)} onClick={() => lastCallAction("reveal_next")}>{lastCallActionName==="reveal_next"?"Revealing...":"Reveal Next Player"}</button>{lastCallEntries.length > 0 && lastCallEntries.every((entry) => entry.is_revealed) && <button style={lastCallButtonStyle(lastCallBusy)} disabled={lastCallBusy} onClick={() => lastCallAction("finalize")}>{lastCallActionName==="finalize"?"Finalizing...":"Finalize Last Call"}</button>}</>}
               {lastCall.phase === "complete" && <><h3>Final session standings are ready.</h3><button style={lastCallButtonStyle(endingLastCall)} disabled={endingLastCall} onClick={() => endAfterLastCall(true)}>{endingLastCall?"Ending Session...":"Export Final Leaderboard & End Session"}</button><button style={lastCallButtonStyle(endingLastCall)} disabled={endingLastCall} onClick={() => endAfterLastCall(false)}>{endingLastCall?"Ending Session...":"End Without Export"}</button></>}
+            </section>
+          )}
+
+          {agingRoom && (
+            <section style={{ marginTop: "1.5rem", padding: "1rem", border: "2px solid #7b4a27", borderRadius: "10px", background: "#f3e3c5", color: "#111" }}>
+              <h2>The Aging Room</h2>
+              <p><strong>Phase:</strong> {String(agingRoom.phase).replaceAll("_", " ")}</p>
+              {agingMessage && <p style={{ color: "#176b2c", fontWeight: 800 }}>{agingMessage}</p>}
+              {agingRoom.phase === "setup" && <>
+                <p>Uncheck anyone who will not play.  At least two players are required.</p>
+                {agingPlayers.map((p) => <label key={p.id} style={{ display: "block", padding: ".35rem" }}><input type="checkbox" checked={agingSelectedPlayers.includes(p.player_id)} onChange={() => setAgingSelectedPlayers((current) => current.includes(p.player_id) ? current.filter((id) => id !== p.player_id) : [...current, p.player_id])} /> {p.player_name}</label>)}
+                <button style={lastCallButtonStyle(Boolean(agingBusy) || agingSelectedPlayers.length < 2)} disabled={Boolean(agingBusy) || agingSelectedPlayers.length < 2} onClick={async () => { await agingAction("set_selected", { playerIds: agingSelectedPlayers }); await agingAction("start"); }}>{agingBusy ? "Starting..." : "Lock Players & Start"}</button>
+              </>}
+              {["question", "bale_question"].includes(agingRoom.phase) && <>
+                <p><strong>{agingRoom.phase === "bale_question" ? "Bale Stack" : `Round ${agingRoom.round_number}`}</strong> • {agingRoom.phase === "bale_question" ? "First to five bales wins" : `${agingRoom.required_correct} Correct Answer${agingRoom.required_correct === 1 ? "" : "s"} to Move On`}</p>
+                <p>{agingRoom.category} / {agingRoom.subcategory} / {agingRoom.difficulty}</p>
+                <h3>{agingRoom.question_text}</h3><p><strong>Correct answer:</strong> {agingRoom.correct_answer}</p>{agingRoom.answer_aliases && <p><strong>Alternate answers:</strong> {agingRoom.answer_aliases}</p>}
+                <p>{agingAnswers.length} answer(s) submitted for attempt {agingRoom.attempt_number}.</p>
+                {agingAnswers.map((a) => <label key={a.id} style={{ display: "block", padding: ".35rem", opacity: a.competitive ? 1 : .55 }}><input type="checkbox" disabled={!a.competitive} checked={agingCorrectAnswers.includes(a.id)} onChange={() => setAgingCorrectAnswers((current) => current.includes(a.id) ? current.filter((id) => id !== a.id) : [...current, a.id])} /> {a.player_name}: {a.submitted_answer || "No answer"}{!a.competitive ? " (just for fun)" : ""}</label>)}
+                <button style={lastCallButtonStyle(Boolean(agingBusy))} disabled={Boolean(agingBusy)} onClick={() => agingAction("grade", { correctAnswerIds: agingCorrectAnswers })}>{agingBusy === "grade" ? "Grading..." : "Grade & Resolve Question"}</button>
+                <button style={lastCallButtonStyle(Boolean(agingBusy) || agingRoom.attempt_number > 1)} disabled={Boolean(agingBusy) || agingRoom.attempt_number > 1} onClick={() => agingAction("retry")}>{agingBusy === "retry" ? "Opening Attempts..." : "Allow Everyone One More Attempt"}</button>
+              </>}
+              {["question_result", "bale_result"].includes(agingRoom.phase) && <>
+                <p><strong>Answer:</strong> {agingRoom.correct_answer}</p>
+                <p>{agingAnswers.find((a) => a.is_correct && a.competitive)?.player_name ? `${agingAnswers.find((a) => a.is_correct && a.competitive)?.player_name} was fastest correct.` : "No eligible player answered correctly."}</p>
+                {agingRoom.phase === "question_result" && agingPlayers.filter((p) => p.status === "active").length === 1 ? <button style={lastCallButtonStyle(Boolean(agingBusy))} disabled={Boolean(agingBusy)} onClick={() => agingAction("check_round")}>Confirm Elimination</button> : <button style={lastCallButtonStyle(Boolean(agingBusy))} disabled={Boolean(agingBusy)} onClick={() => agingAction("next_question")}>Next Question</button>}
+              </>}
+              {agingRoom.phase === "elimination" && <><h3>{agingPlayers.find((p) => p.player_id === agingRoom.eliminated_player_id)?.player_name} is eliminated.</h3><button style={lastCallButtonStyle(Boolean(agingBusy))} disabled={Boolean(agingBusy)} onClick={() => agingAction("next_round")}>Start Next Round</button></>}
+              <h3>Players</h3><ol>{agingPlayers.filter((p) => p.status !== "excluded").map((p) => <li key={p.id}>{p.player_name} — {p.status}{["finalist", "winner"].includes(p.status) ? ` — ${p.bale_count}/5 bales` : !["eliminated"].includes(p.status) ? ` — ${p.round_correct}/${agingRoom.required_correct}` : p.final_place ? ` — ${p.final_place}${p.final_place === 1 ? "st" : p.final_place === 2 ? "nd" : p.final_place === 3 ? "rd" : "th"}` : ""}</li>)}</ol>
+              {agingRoom.phase === "complete" && <><h3>{agingPlayers.find((p) => p.player_id === agingRoom.winner_player_id)?.player_name} wins The Aging Room!  Session points have been awarded.</h3><button style={lastCallButtonStyle(Boolean(agingBusy))} disabled={Boolean(agingBusy)} onClick={() => agingAction("close")}>{agingBusy === "close" ? "Returning..." : "Return to Main Trivia"}</button></>}
             </section>
           )}
 
@@ -1267,7 +1349,7 @@ await loadSession();
       <button type="button" onClick={revealNextCaskStrength} style={{background:"#5b3511",color:"#ffffff",padding:"0.7rem 1rem",border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"bold"}}>Reveal Next Player</button>
       {caskStrengthEntries.length>0 && caskStrengthEntries.every((entry)=>entry.is_revealed) && <button type="button" onClick={finalizeCaskStrength} style={{marginLeft:"0.5rem",background:"#5b3511",color:"#ffffff",padding:"0.7rem 1rem",border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"bold"}}>Finalize Rickhouse & Award Session Points</button>}
     </>}
-    {rickhouseGame.game_phase === "cask_strength_complete" && <p><strong>Rickhouse complete. Session points have been awarded.</strong></p>}
+    {rickhouseGame.game_phase === "cask_strength_complete" && <><p><strong>Rickhouse complete. Session points have been awarded.</strong></p><button type="button" onClick={returnFromRickhouse} disabled={returningFromRickhouse} style={lastCallButtonStyle(returningFromRickhouse)}>{returningFromRickhouse ? "Returning..." : "Return to Main Trivia"}</button></>}
   </section>
 )}
 

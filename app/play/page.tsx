@@ -10,7 +10,6 @@ export default function PlayPage() {
   const [answerText, setAnswerText] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [selectingPourId, setSelectingPourId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [rickhouseGame, setRickhouseGame] = useState<any>(null);
@@ -36,8 +35,14 @@ const caskAutoSubmittedRef = useRef("");
   const [lastCallWager, setLastCallWager] = useState("");
   const [lastCallAnswer, setLastCallAnswer] = useState("");
   const [lastCallSubmitting, setLastCallSubmitting] = useState("");
+  const [agingRoom, setAgingRoom] = useState<any>(null);
+  const [agingPlayer, setAgingPlayer] = useState<any>(null);
+  const [agingAnswer, setAgingAnswer] = useState<any>(null);
+  const [agingAnswerText, setAgingAnswerText] = useState("");
+  const [agingSubmitting, setAgingSubmitting] = useState(false);
+  const [agingWasFastest, setAgingWasFastest] = useState(false);
+  const agingQuestionKeyRef = useRef("");
   const currentQuestionIdRef = useRef<string | null>(null);
-  const currentQuestionSignatureRef = useRef<string | null>(null);
   const autoSubmittedQuestionIdRef = useRef<string | null>(null);
   const answerTextRef = useRef("");
 
@@ -63,9 +68,9 @@ const caskAutoSubmittedRef = useRef("");
     const response = await fetch(
       `/api/rickhouse/player-state?sessionId=${sessionId}&playerId=${playerId}`
     );
-
+  
     const data = await response.json();
-
+  
     if (!response.ok) {
       setRickhouseGame(null);
 setRickhousePours([]);
@@ -79,7 +84,7 @@ setRickhouseStandings([]);
 setProposedNextPicker(null);
 return;
     }
-
+  
     setRickhouseGame(data.game);
     setRickhousePours(data.pours);
     setRickhousePicker(data.picker);
@@ -143,11 +148,7 @@ if (data.game?.cask_strength_ends_at) {
     }
 
     const newQuestionId = data.session.current_question_id;
-    const newQuestionText = String(data.session.current_question_text ?? "");
-    const newQuestionSignature = newQuestionId
-      ? `${newQuestionId}:${newQuestionText}`
-      : null;
-    const previousQuestionSignature = currentQuestionSignatureRef.current;
+    const previousQuestionId = currentQuestionIdRef.current;
 
     setSession(data.session);
     setPlayer(data.player);
@@ -156,16 +157,18 @@ if (data.game?.cask_strength_ends_at) {
     await loadRickhouseState(data.session.id, data.player.id);
     const lastResponse = await fetch(`/api/last-call/current?sessionId=${data.session.id}&playerId=${data.player.id}&t=${Date.now()}`, { cache: "no-store" });
     if (lastResponse.ok) { const lastData = await lastResponse.json(); setLastCall(lastData.game); setLastCallEntry(lastData.entry); }
+    const agingResponse = await fetch(`/api/aging-room/current?sessionId=${data.session.id}&playerId=${data.player.id}&t=${Date.now()}`, { cache: "no-store" });
+    if (agingResponse.ok) {
+      const agingData = await agingResponse.json(); setAgingRoom(agingData.game); setAgingPlayer(agingData.player); setAgingAnswer(agingData.answer); setAgingWasFastest(Boolean(agingData.playerWasFastest));
+      const key = agingData.game ? `${agingData.game.question_number}:${agingData.game.attempt_number}` : "";
+      if (key && key !== agingQuestionKeyRef.current) { agingQuestionKeyRef.current = key; setAgingAnswerText(""); }
+    }
 
     // Ignore brief polling snapshots where the server has temporarily cleared
     // the question. Treating null as a new question used to erase an answer
     // that the player was still typing.
-    if (
-      newQuestionId &&
-      newQuestionSignature !== previousQuestionSignature
-    ) {
+    if (newQuestionId && newQuestionId !== previousQuestionId) {
       currentQuestionIdRef.current = newQuestionId;
-      currentQuestionSignatureRef.current = newQuestionSignature;
       autoSubmittedQuestionIdRef.current = null;
       setSubmitted(false);
       setAnswerText("");
@@ -186,13 +189,24 @@ if (data.game?.cask_strength_ends_at) {
     finally { setLastCallSubmitting(""); }
   }
 
-  async function submitAnswer(answerToSubmit?: string, autoSubmitted = false) {
+  async function submitAgingAnswer() {
+    if (!session?.id || !player?.id || !agingAnswerText.trim() || agingSubmitting) return;
+    setAgingSubmitting(true); setError(""); setMessage("");
+    try {
+      const response = await fetch("/api/aging-room/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "submit", sessionId: session.id, playerId: player.id, answer: agingAnswerText }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not submit Aging Room answer.");
+      setMessage(data.competitive ? "Aging Room answer submitted." : "Answer submitted for fun.  You are already safe this round."); await loadGame();
+    } catch (error: any) { setError(error.message || "Could not submit Aging Room answer."); }
+    finally { setAgingSubmitting(false); }
+  }
+
+  async function submitAnswer(answerToSubmit?: string) {
     if (!session?.id || !player?.id || !session?.current_question_id) {
       setError("Missing question or player information.");
       return;
     }
 
-    const finalAnswer = String(answerToSubmit ?? answerTextRef.current ?? "");
+    const finalAnswer = String(answerTextRef.current ?? "");
 
     if (!finalAnswer.trim()) {
       setError("Please enter an answer before submitting.");
@@ -226,7 +240,6 @@ const response = await fetch(submitEndpoint, {
           playerId: String(player.id),
           questionId: String(session.current_question_id),
           submittedAnswer: finalAnswer,
-          autoSubmitted,
         }),
       });
 
@@ -251,12 +264,11 @@ const response = await fetch(submitEndpoint, {
   }
 
   async function selectRickhousePour(pourId: string) {
-    if (!rickhouseGame?.id || !player?.id || selectingPourId) return;
-
+    if (!rickhouseGame?.id || !player?.id) return;
+  
     setError("");
-    setSelectingPourId(pourId);
-    try {
-      const response = await fetch("/api/rickhouse/select-pour", {
+  
+    const response = await fetch("/api/rickhouse/select-pour", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -267,36 +279,30 @@ const response = await fetch(submitEndpoint, {
         playerId: player.id,
       }),
     });
-
-      const data = await response.json();
-
+  
+    const data = await response.json();
+  
     if (!response.ok) {
       setError(data.error || "Could not select pour.");
-        return;
+      return;
     }
-
-      setRickhouseGame(data.game);
-      setMessage("Square selected.");
-      await loadGame();
-    } catch (error: any) {
-      setError(error.message || "Could not select pour.");
-    } finally {
-      setSelectingPourId(null);
-    }
+  
+    setRickhouseGame(data.game);
+    await loadGame();
   }
 
   async function submitAngelsShareWager() {
     if (!rickhouseGame?.id || !player?.id) return;
-
+  
     const wager = Number(angelsShareWager);
-
+  
     if (Number.isNaN(wager) || wager < 0 || wager > maxAngelsShareWager) {
       setError(`Enter a wager between 0 and ${maxAngelsShareWager}.`);
       return;
     }
-
+  
     setError("");
-
+  
     const response = await fetch("/api/rickhouse/submit-wager", {
       method: "POST",
       headers: {
@@ -308,17 +314,23 @@ const response = await fetch(submitEndpoint, {
         wagerAmount: wager,
       }),
     });
-
+  
     const data = await response.json();
-
+  
     if (!response.ok) {
       setError(data.error || "Could not submit Angel's Share wager.");
       return;
     }
-
+  
     setAngelsShareWager("");
     await loadGame();
   }
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   useEffect(() => {
     loadGame();
@@ -329,16 +341,6 @@ const response = await fetch(submitEndpoint, {
 
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    if (!message) return;
-
-    const timeout = window.setTimeout(() => {
-      setMessage("");
-    }, 5000);
-
-    return () => window.clearTimeout(timeout);
-  }, [message]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -361,10 +363,8 @@ const response = await fetch(submitEndpoint, {
       return;
     }
 
-    const questionId = session.current_question_id;
-    const typedAnswer = answerTextRef.current;
-    autoSubmittedQuestionIdRef.current = questionId;
-    void submitAnswer(typedAnswer, true);
+    autoSubmittedQuestionIdRef.current = session.current_question_id;
+    submitAnswer();
   }, [
     secondsRemaining,
     session?.current_question_id,
@@ -443,7 +443,28 @@ const response = await fetch(submitEndpoint, {
             </section>
           )}
 
-{!lastCall && rickhouseGame?.game_phase?.startsWith("cask_strength") && (
+          {!lastCall && agingRoom && (
+            <section style={{ marginTop: "2rem", padding: "1.25rem", border: "2px solid #7b4a27", borderRadius: "10px", background: "#f3e3c5", color: "#111" }}>
+              <h2>The Aging Room</h2>
+              {!agingPlayer || agingPlayer.status === "excluded" ? <p>You are not playing this game, but you can follow it on the communal display.</p> : <>
+                {agingRoom.phase === "setup" && <p>The host is selecting the Aging Room players.</p>}
+                {agingPlayer.status === "eliminated" && <p><strong>You have been eliminated.</strong>  You may still answer questions for fun.</p>}
+                {agingPlayer.status === "passed" && <p style={{ color: "#176b2c", fontWeight: 800 }}>You have passed this round.  You may keep answering for fun.</p>}
+                {["question", "bale_question"].includes(agingRoom.phase) && <>
+                  <p><strong>{agingRoom.phase === "bale_question" ? "Bale Stack Final" : `Round ${agingRoom.round_number}`}</strong></p>
+                  <p>{agingRoom.category} • {agingRoom.subcategory} • {agingRoom.difficulty}</p>
+                  {agingRoom.phase === "bale_question" ? <p><strong>First to 5 bales wins.</strong><br/>Your bale stack: {agingPlayer.bale_count}/5</p> : <p><strong>{agingRoom.required_correct} Answer{agingRoom.required_correct === 1 ? "" : "s"} to Move On</strong><br/>You have {agingPlayer.round_correct}/{agingRoom.required_correct}.</p>}
+                  <h3>{agingRoom.question_text}</h3>
+                  {agingAnswer ? <p style={{ color: "#176b2c", fontWeight: 800 }}>Your answer is submitted for this attempt.</p> : <><textarea value={agingAnswerText} onChange={(event) => setAgingAnswerText(event.target.value)} placeholder="Type your answer..." style={{ width: "100%", minHeight: "90px", padding: ".75rem", boxSizing: "border-box" }} /><button onClick={submitAgingAnswer} disabled={agingSubmitting || !agingAnswerText.trim()} style={{ marginTop: ".5rem", padding: ".75rem 1rem", background: agingSubmitting || !agingAnswerText.trim() ? "#777" : "#6b3f22", color: "white", border: 0, borderRadius: "6px", fontWeight: 800, cursor: agingSubmitting ? "wait" : "pointer" }}>{agingSubmitting ? "Submitting..." : "Submit Answer"}</button></>}
+                </>}
+                {["question_result", "bale_result"].includes(agingRoom.phase) && <><p><strong>Correct answer:</strong> {agingRoom.correct_answer}</p>{agingWasFastest && <p style={{ color: "#176b2c", fontWeight: 800 }}>You were fastest with the correct answer!  You earned {agingRoom.phase === "bale_result" ? "a bale" : "an aging mark"}.</p>}<p>Waiting for the host to continue.</p></>}
+                {agingRoom.phase === "elimination" && <p>{agingPlayer.player_id === agingRoom.eliminated_player_id ? <strong>You were eliminated this round.</strong> : "The next round is being prepared."}</p>}
+                {agingRoom.phase === "complete" && <><h3>{agingPlayer.status === "winner" ? "You won The Aging Room!" : "The Aging Room is complete."}</h3><p>Session points awarded: {agingPlayer.session_points_awarded ?? 0}</p></>}
+              </>}
+            </section>
+          )}
+
+{!lastCall && !agingRoom && rickhouseGame?.game_phase?.startsWith("cask_strength") && (
             <section style={{marginTop:"2rem",padding:"1.25rem",border:"2px solid #5b3511",borderRadius:"10px",background:"#fff8dc",color:"#111111"}}>
               <h2>Cask Strength</h2>
               {!caskStrengthEntry ? <><p>Only players with a positive Rickhouse score qualify.</p><p><strong>Your status:</strong> Eliminated</p><p>Watch the final round on the communal display.</p></> : <>
@@ -659,7 +680,7 @@ const response = await fetch(submitEndpoint, {
                 key={pour.id}
                 type="button"
                 onClick={() => selectRickhousePour(pour.id)}
-                disabled={!isRickhousePicker || pour.is_used || selectingPourId !== null}
+                disabled={!isRickhousePicker || pour.is_used}
                 style={{
                   width: "100%",
                   height: "56px",
@@ -667,9 +688,7 @@ const response = await fetch(submitEndpoint, {
                   overflow: "hidden",
                   marginTop: "0.25rem",
                   border: "1px solid #ccc",
-                  background: selectingPourId === pour.id
-                    ? "#1f7a3f"
-                    : pour.is_used
+                  background: pour.is_used
                     ? "#ddd"
                     : isRickhousePicker
                     ? "#111"
@@ -680,18 +699,13 @@ const response = await fetch(submitEndpoint, {
                     ? "white"
                     : "#333",
                   cursor:
-                    !isRickhousePicker || pour.is_used || selectingPourId !== null
+                    !isRickhousePicker || pour.is_used
                       ? "not-allowed"
                       : "pointer",
                   fontWeight: "bold",
-                  transform: selectingPourId === pour.id ? "translateY(2px)" : "none",
                 }}
               >
-                {selectingPourId === pour.id
-                  ? "Selecting..."
-                  : pour.is_used
-                  ? ""
-                  : pour.point_value}
+                {pour.is_used ? "" : pour.point_value}
               </button>
             ))}
           </div>
@@ -701,7 +715,7 @@ const response = await fetch(submitEndpoint, {
   </section>
 )}
 
-          {!lastCall && !rickhouseGame?.game_phase?.startsWith("cask_strength") && session.current_question_text ? (
+          {!lastCall && !agingRoom && !rickhouseGame?.game_phase?.startsWith("cask_strength") && session.current_question_text ? (
             <>
               <p>
                 <strong>Category:</strong> {session.current_category}
@@ -793,7 +807,7 @@ const response = await fetch(submitEndpoint, {
                   : "Submit Answer"}
               </button>}
             </>
-          ) : !lastCall && !rickhouseGame?.game_phase?.startsWith("cask_strength") ? (
+          ) : !lastCall && !agingRoom && !rickhouseGame?.game_phase?.startsWith("cask_strength") ? (
             <p>Waiting for question...</p>
           ) : null}
 

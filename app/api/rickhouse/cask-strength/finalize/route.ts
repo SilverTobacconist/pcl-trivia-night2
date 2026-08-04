@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
+import { recordGameResult } from "@/lib/gameResults";
 
 function placementPoints(place: number) {
   if (place === 1) return 10;
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
           : Math.ceil(pointPool / tiedEntries.length);
 
       for (const entry of tiedEntries) {
+        if (entry.session_points_awarded !== null) continue;
         const { error: entryUpdateError } = await supabase
           .from("rickhouse_cask_strength_entries")
           .update({ session_points_awarded: pointsAwarded })
@@ -123,11 +125,25 @@ export async function POST(request: Request) {
       index += tiedEntries.length;
     }
 
+    const { data: allScores } = await supabase.from("rickhouse_scores").select("player_id,score").eq("game_id", game.id);
+    const rankedScores = (allScores || []).map((score) => ({
+      player_id: score.player_id,
+      game_score: Number(entries.find((entry) => entry.player_id === score.player_id)?.final_score ?? score.score ?? 0),
+    })).sort((a, b) => b.game_score - a.game_score);
+    const allPlayerIds = rankedScores.map((entry) => entry.player_id);
+    const { data: names } = await supabase.from("players").select("id,display_name").in("id", allPlayerIds.length ? allPlayerIds : ["00000000-0000-0000-0000-000000000000"]);
+    await recordGameResult(game.session_id, game.id, "rickhouse", rankedScores.map((entry, entryIndex, all) => ({
+      player_id: entry.player_id,
+      player_name: names?.find((player) => player.id === entry.player_id)?.display_name || "Unknown",
+      place: all.findIndex((candidate) => candidate.game_score === entry.game_score) + 1,
+      game_score: entry.game_score,
+    })));
+
     const { error: gameUpdateError } = await supabase
       .from("rickhouse_games")
       .update({
         game_phase: "cask_strength_complete",
-        status: "complete",
+        status: "active",
       })
       .eq("id", gameId);
 
@@ -144,8 +160,8 @@ export async function POST(request: Request) {
     const { error: sessionUpdateError } = await supabase
       .from("sessions")
       .update({
-        game_mode: "main",
-        question_status: "closed",
+        game_mode: "rickhouse",
+        question_status: "rickhouse_complete",
         current_question_id: null,
         current_question_text: null,
         current_answer: null,

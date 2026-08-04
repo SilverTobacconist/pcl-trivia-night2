@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { loadQuestions } from "@/lib/questions";
+import { recordGameResult } from "@/lib/gameResults";
 
 const labels = ["", "Easy", "Medium", "Hard", "Extra Hard"];
 function placementPoints(place: number) { return place === 1 ? 10 : place === 2 ? 8 : place === 3 ? 6 : place === 4 ? 4 : 1; }
@@ -9,10 +10,13 @@ async function gameBySession(sessionId: string) { return (await supabase.from("l
 async function awardInterruptedRickhouse(sessionId: string) {
   const { data: game } = await supabase.from("rickhouse_games").select("*").eq("session_id", sessionId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (!game) return;
-  const { data: scores } = await supabase.from("rickhouse_scores").select("*").eq("game_id", game.id).gt("score", 0).order("score", { ascending: false });
+  const { data: allScores } = await supabase.from("rickhouse_scores").select("*").eq("game_id", game.id).order("score", { ascending: false });
+  const scores = (allScores || []).filter((row) => Number(row.score) > 0);
+  const scorePlayerIds = (allScores || []).map((row) => row.player_id);
+  const { data: scorePlayers } = await supabase.from("players").select("id,display_name").in("id", scorePlayerIds.length ? scorePlayerIds : ["00000000-0000-0000-0000-000000000000"]);
   let index = 0;
-  while (index < (scores || []).length) {
-    const tied = (scores || []).filter((row) => Number(row.score) === Number(scores![index].score));
+  while (index < scores.length) {
+    const tied = scores.filter((row) => Number(row.score) === Number(scores[index].score));
     const pool = tied.reduce((sum, _row, offset) => sum + placementPoints(index + offset + 1), 0);
     const award = Math.ceil((pool / tied.length) / 2);
     for (const row of tied) {
@@ -21,6 +25,12 @@ async function awardInterruptedRickhouse(sessionId: string) {
     }
     index += tied.length;
   }
+  await recordGameResult(sessionId, game.id, "rickhouse", (allScores || []).map((row, rowIndex, all) => ({
+    player_id: row.player_id,
+    player_name: scorePlayers?.find((player) => player.id === row.player_id)?.display_name || "Unknown",
+    place: all.findIndex((candidate) => Number(candidate.score) === Number(row.score)) + 1,
+    game_score: Number(row.score || 0),
+  })));
   await supabase.from("rickhouse_games").update({ status: "completed", game_phase: "interrupted_by_last_call" }).eq("id", game.id);
 }
 
