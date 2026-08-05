@@ -57,6 +57,22 @@ export async function POST(request: Request) {
     const game = await gameBySession(sessionId);
     if (!game) return NextResponse.json({ error: "Last Call has not started." }, { status: 404 });
 
+    if (action === "return_main") {
+      const { error: entryError } = await supabase.from("last_call_entries").delete().eq("game_id", game.id);
+      if (entryError) throw entryError;
+      const { error: gameError } = await supabase.from("last_call_games").delete().eq("id", game.id);
+      if (gameError) throw gameError;
+      const { error: sessionError } = await supabase.from("sessions").update({
+        game_mode: "main", question_status: "closed", current_question_id: null,
+        current_question_text: null, current_answer: null, current_answer_aliases: null,
+        current_category: null, current_subcategory: null, current_difficulty: null,
+        question_started_at: null, question_ends_at: null, question_duration_seconds: null,
+        show_answer: false,
+      }).eq("id", sessionId);
+      if (sessionError) throw sessionError;
+      return NextResponse.json({ success: true });
+    }
+
     if (action === "vote") {
       const vote = Number(body.vote);
       if (!playerId || ![1, 2, 3, 4].includes(vote) || game.phase !== "voting") return NextResponse.json({ error: "That vote is not valid now." }, { status: 400 });

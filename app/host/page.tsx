@@ -709,6 +709,11 @@ setAnswerRevealed(true);
     return () => window.clearTimeout(timer);
   }, [lastCallMessage]);
 
+  useEffect(() => {
+    if (rickhouseGame?.game_phase !== "cask_strength_grading") return;
+    void loadCaskStrengthEntries();
+  }, [rickhouseGame?.id, rickhouseGame?.game_phase]);
+
   async function loadNextQuestion() {
     if (!session?.id) return;
 
