@@ -51,6 +51,55 @@ async function finish(game: any, winnerId: string) {
   await supabase.from("sessions").update({ game_mode: "aging_room", question_status: "aging_room_complete", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, current_category: null, current_subcategory: null, current_difficulty: null, show_answer: false }).eq("id", game.session_id);
 }
 
+async function finishEarly(game: any) {
+  const { data: existingResult } = await supabase
+    .from("session_game_results")
+    .select("id")
+    .eq("source_game_id", game.id)
+    .maybeSingle();
+  if (existingResult) return;
+
+  const { data } = await supabase.from("aging_room_players").select("*").eq("game_id", game.id);
+  const participants = (data || []).filter((row) => row.status !== "excluded");
+  const live = participants.filter((row) => !row.final_place);
+  const inBaleStack = ["bale_question", "bale_result"].includes(game.phase);
+  const scoreFor = (row: any) => Number(inBaleStack ? row.bale_count : row.round_correct) || 0;
+  live.sort((a, b) => scoreFor(b) - scoreFor(a));
+
+  let index = 0;
+  while (index < live.length) {
+    const score = scoreFor(live[index]);
+    const tied = live.slice(index).filter((row) => scoreFor(row) === score);
+    const place = index + 1;
+    for (const row of tied) row.final_place = place;
+    index += tied.length;
+  }
+
+  const placements = participants.filter((row) => row.final_place).sort((a, b) => Number(a.final_place) - Number(b.final_place));
+  index = 0;
+  while (index < placements.length) {
+    const place = Number(placements[index].final_place);
+    const tied = placements.filter((row) => Number(row.final_place) === place);
+    const pointPool = tied.reduce((sum, _row, offset) => sum + award(place + offset), 0);
+    const points = Math.ceil(pointPool / tied.length / 2);
+    for (const row of tied) {
+      if (row.session_points_awarded === null) {
+        const { data: player } = await supabase.from("players").select("score").eq("id", row.player_id).single();
+        await supabase.from("players").update({ score: Number(player?.score || 0) + points }).eq("id", row.player_id);
+      }
+      await supabase.from("aging_room_players").update({ final_place: place, session_points_awarded: row.session_points_awarded === null ? points : row.session_points_awarded }).eq("id", row.id);
+    }
+    index += tied.length;
+  }
+
+  await recordGameResult(game.session_id, game.id, "aging_room", placements.map((row) => ({
+    player_id: row.player_id,
+    player_name: row.player_name,
+    place: Number(row.final_place),
+    game_score: scoreFor(row),
+  })));
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -70,6 +119,13 @@ export async function POST(request: Request) {
     }
     if (!game) return NextResponse.json({ error: "Aging Room has not been set up." }, { status: 404 });
 
+    if (action === "abort") {
+      if (game.phase !== "setup") await finishEarly(game);
+      await supabase.from("aging_room_games").update({ status: "closed", phase: game.phase === "setup" ? "setup" : "ended_early" }).eq("id", game.id);
+      await supabase.from("sessions").update({ game_mode: "main", question_status: "closed", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, current_category: null, current_subcategory: null, current_difficulty: null, show_answer: false }).eq("id", sessionId);
+      return NextResponse.json({ success: true });
+    }
+
     if (action === "set_selected") {
       if (game.phase !== "setup") return NextResponse.json({ error: "The player list is already locked." }, { status: 409 });
       const selected = new Set<string>(body.playerIds || []);
@@ -81,8 +137,8 @@ export async function POST(request: Request) {
       const { data: selected } = await supabase.from("aging_room_players").select("*").eq("game_id", game.id).eq("status", "selected");
       const count = selected?.length || 0;
       if (count < 2) return NextResponse.json({ error: "Select at least two players." }, { status: 400 });
-      for (const row of selected || []) await supabase.from("aging_room_players").update({ status: "active", round_correct: 0 }).eq("id", row.id);
       const phase = count === 2 ? "bale_question" : "question";
+      for (const row of selected || []) await supabase.from("aging_room_players").update({ status: count === 2 ? "finalist" : "active", round_correct: 0 }).eq("id", row.id);
       const base = { ...game, round_number: count === 2 ? 0 : 1, required_correct: count === 2 ? 5 : requiredFor(count), status: "active" };
       await supabase.from("aging_room_games").update({ round_number: base.round_number, required_correct: base.required_correct, status: "active" }).eq("id", game.id);
       await setQuestion(base, phase);
