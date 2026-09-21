@@ -87,6 +87,7 @@ button.button-clicked:not(:disabled) {
  .event-card input { display: block; box-sizing: border-box; width: 100%; margin: .6rem 0; padding: .85rem; border-radius: 8px; border: 1px solid #8d7651; font-size: 1rem; }
  .event-shell button { margin: .35rem .35rem .35rem 0; border: 0; border-radius: 8px; background: #d99d3d; color: #1d1711; padding: .75rem 1rem; font-size: 1rem; font-weight: 700; cursor: pointer; }
  .event-shell a { color: #ffcc74; }
+ .event-secondary-link { display: inline-block; margin: .35rem; padding: .75rem 1rem; border: 1px solid #d99d3d; border-radius: 8px; text-decoration: none; font-weight: 700; }
  .event-error { background: #722; padding: .8rem; border-radius: 8px; }
  .event-timer { font-size: 2rem; font-weight: 700; color: #e2b15c; margin: 0; }
  .event-dispute { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #8d7651; }
