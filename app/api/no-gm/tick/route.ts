@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAnonymousPlayer } from "@/lib/noGmAuth";
 import { loadQuestions, normalizeAnswer } from "@/lib/questions";
+import { usedQuestionIdsForLocation } from "@/lib/noGmQuestions";
 
 const QUESTION_SECONDS = 60;
 const REVEAL_SECONDS = 15;
@@ -8,6 +9,7 @@ const INACTIVITY_MS = 10 * 60 * 1000;
 
 function pointsFor(difficulty: string | null) {
   const value = String(difficulty || "").toLowerCase();
+  if (value.includes("extra")) return 5;
   if (value.includes("hard")) return 3;
   if (value.includes("medium")) return 2;
   return 1;
@@ -74,8 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (session.question_status !== "ready") return NextResponse.json({ ok: true });
-    const { data: used } = await supabase.from("question_history").select("question_id").eq("session_id", sessionId).eq("game_mode", "main");
-    const usedIds = new Set((used || []).map((row: any) => row.question_id));
+    const usedIds = await usedQuestionIdsForLocation(supabase, session.location, ["main", "last_call"]);
     const candidates = (await loadQuestions()).filter((question: any) => question.question_id && question.question_text && !usedIds.has(question.question_id));
     if (!candidates.length) {
       await exportLeaderboard(supabase, sessionId, "completed");

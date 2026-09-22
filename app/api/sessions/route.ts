@@ -10,6 +10,9 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const { location, hostName } = body;
+    if (!["Hastings", "Norfolk"].includes(location)) {
+      return NextResponse.json({ error: "Choose Hastings or Norfolk." }, { status: 400 });
+    }
 
     const { data, error } = await supabase
       .from("sessions")

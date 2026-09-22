@@ -19,5 +19,14 @@ export async function GET(request: Request) {
   const { data: myAnswer } = currentPlayer && session?.current_question_id
     ? await supabase.from("answers").select("submitted_answer,is_correct,points_awarded").eq("session_id", sessionId).eq("player_id", currentPlayer.id).eq("question_id", session.current_question_id).maybeSingle()
     : { data: null };
-  return NextResponse.json({ session, control, players: players || [], dispute: disputes || null, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null }, { headers: { "Cache-Control": "no-store" } });
+  const { data: lastCallGame } = session?.game_mode === "last_call"
+    ? await supabase.from("last_call_games").select("*").eq("session_id", sessionId).is("completed_at", null).maybeSingle()
+    : { data: null };
+  const { data: lastCallEntries } = lastCallGame
+    ? await supabase.from("last_call_entries").select("*,players(display_name)").eq("game_id", lastCallGame.id).order("starting_score", { ascending: true })
+    : { data: [] };
+  const lastCallEntry = currentPlayer && lastCallGame
+    ? (lastCallEntries || []).find((entry: any) => entry.player_id === currentPlayer.id) || null
+    : null;
+  return NextResponse.json({ session, control, players: players || [], dispute: disputes || null, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null }, { headers: { "Cache-Control": "no-store" } });
 }

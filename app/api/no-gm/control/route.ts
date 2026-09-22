@@ -20,16 +20,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (!isDecisionPlayer) return NextResponse.json({ error: "The current decision player chooses the next move." }, { status: 403 });
+    if (action === "end_mode") {
+      await supabase.from("sessions").update({ game_mode: "main", question_status: "lobby", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
+      const { error } = await supabase.from("session_controls").update({ state: "lobby", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
     if (action === "start_main") {
       const { error } = await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId); if (error) throw error;
       await supabase.from("sessions").update({ game_mode: "main", question_status: "ready", current_question_id: null, current_question_text: null, show_answer: false }).eq("id", sessionId);
       return NextResponse.json({ ok: true });
     }
-    if (action === "end") {
-      const { data: leaderboard } = await supabase.from("players").select("id,display_name,score").eq("session_id", sessionId).order("score", { ascending: false });
-      const { error } = await supabase.from("session_leaderboard_exports").insert({ session_id: sessionId, reason: "bartender_ended", leaderboard: leaderboard || [] }); if (error && error.code !== "23505") throw error;
-      await supabase.from("session_controls").update({ state: "ended", ended_at: new Date().toISOString(), exported_at: new Date().toISOString() }).eq("session_id", sessionId);
-      await supabase.from("sessions").update({ status: "ended", game_mode: "complete", question_status: "closed", current_question_text: null, show_answer: false }).eq("id", sessionId);
+    if (action === "end_session" || action === "end") {
+      const { data: existing } = await supabase.from("last_call_games").select("id").eq("session_id", sessionId).is("completed_at", null).maybeSingle();
+      if (!existing) {
+        const { error } = await supabase.from("last_call_games").insert({ session_id: sessionId, phase: "voting", phase_started_at: new Date().toISOString() });
+        if (error) throw error;
+      }
+      await supabase.from("sessions").update({ game_mode: "last_call", question_status: "last_call_voting", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
+      await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });
