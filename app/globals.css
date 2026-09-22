@@ -91,6 +91,10 @@ button.button-clicked:not(:disabled) {
  .event-error { background: #722; padding: .8rem; border-radius: 8px; }
  .event-timer { font-size: 2rem; font-weight: 700; color: #e2b15c; margin: 0; }
  .event-dispute { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #8d7651; }
+ .event-locked-answer { background: #f8f1df; color: #111; padding: .85rem; border-radius: 8px; }
+ .event-result-correct, .event-result-wrong { padding: .85rem; border-radius: 8px; font-weight: 700; }
+ .event-result-correct { background: #1f6a3b; }
+ .event-result-wrong { background: #7d2929; }
  .event-display { min-height: 100vh; background: #14100c; color: #fff7e6; padding: 4vw; font-family: Arial, sans-serif; text-align: center; }
  .event-display h1 { color: #e2b15c; font-size: clamp(2rem, 5vw, 5rem); }
  .event-display h2 { font-size: clamp(2rem, 5vw, 4.5rem); max-width: 1200px; margin: 1.5rem auto; }
