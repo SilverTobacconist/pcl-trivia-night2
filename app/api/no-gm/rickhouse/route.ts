@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     if (!player || player.left_at || !control) return NextResponse.json({ error: "Game player not found." }, { status: 404 });
     if (action === "start") {
       if (control.decision_player_id !== player.id) return NextResponse.json({ error: "Only the Decision Player starts a mode." }, { status: 403 });
-      return startRickhouse(forwarded({ sessionId, roundName: "single_cask", pickerPlayerId: player.id }));
+      const response = await startRickhouse(forwarded({ sessionId, roundName: "single_cask", pickerPlayerId: player.id }));
+      if (response.ok) await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+      return response;
     }
     if (!game) return NextResponse.json({ error: "Rickhouse is not active." }, { status: 404 });
     if (action === "pick") {

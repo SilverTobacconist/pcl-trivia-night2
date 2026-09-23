@@ -21,11 +21,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (action === "leave") {
-      await supabase.from("players").update({ left_at: new Date().toISOString() }).eq("id", player.id);
       if (isDecisionPlayer) {
-        const { data: next } = await supabase.from("players").select("id").eq("session_id", sessionId).is("left_at", null).neq("id", player.id).order("joined_at").limit(1).maybeSingle();
-        if (next) await supabase.from("session_controls").update({ decision_player_id: next.id, updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+        const { data: remaining } = await supabase.from("players").select("id").eq("session_id", sessionId).is("left_at", null).neq("id", player.id).order("joined_at");
+        if (!(remaining || []).length) {
+          const { data: leaderboard } = await supabase.from("players").select("id,display_name,score").eq("session_id", sessionId).order("score", { ascending: false });
+          await supabase.from("players").update({ left_at: new Date().toISOString() }).eq("id", player.id);
+          await supabase.from("session_leaderboard_exports").upsert({ session_id: sessionId, reason: "last_player_left", leaderboard: leaderboard || [] }, { onConflict: "session_id" });
+          await supabase.from("session_controls").update({ state: "ended", ended_at: new Date().toISOString(), exported_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+          await supabase.from("sessions").update({ status: "ended", game_mode: "complete", question_status: "closed", show_answer: false }).eq("id", sessionId);
+          return NextResponse.json({ ok: true, ended: true });
+        }
+        const next = (remaining || []).find((candidate: any) => candidate.id === body.targetPlayerId);
+        if (!next) return NextResponse.json({ error: "Choose who will become the new Decision Player before leaving." }, { status: 400 });
+        await supabase.from("players").update({ left_at: new Date().toISOString() }).eq("id", player.id);
+        await supabase.from("session_controls").update({ decision_player_id: next.id, updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+        return NextResponse.json({ ok: true, passedTo: next.id });
       }
+      await supabase.from("players").update({ left_at: new Date().toISOString() }).eq("id", player.id);
       return NextResponse.json({ ok: true });
     }
     if (!isDecisionPlayer) return NextResponse.json({ error: "The current decision player chooses the next move." }, { status: 403 });
