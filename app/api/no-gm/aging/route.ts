@@ -35,11 +35,14 @@ export async function POST(request: Request) {
         const created = await supabase.from("aging_room_games").insert({ session_id: sessionId, phase: "setup", status: "active", phase_started_at: new Date().toISOString() }).select("*").single();
         if (created.error) throw created.error; activeGame = created.data;
         const { data: players } = await supabase.from("players").select("id,display_name").eq("session_id", sessionId).is("left_at", null);
+        if ((players || []).length < 2) return NextResponse.json({ error: "The Aging Room needs at least two players." }, { status: 400 });
         await supabase.from("aging_room_players").insert((players || []).map((row: any) => ({ game_id: activeGame.id, player_id: row.id, player_name: row.display_name, status: "active", round_correct: 0, bale_count: 0 })));
-        await supabase.from("aging_room_games").update({ round_number: 1, required_correct: (players || []).length <= 4 ? 3 : (players || []).length <= 6 ? 2 : 1 }).eq("id", activeGame.id);
-        activeGame = { ...activeGame, round_number: 1, required_correct: (players || []).length <= 4 ? 3 : (players || []).length <= 6 ? 2 : 1 };
+        const finalRound = (players || []).length === 2;
+        await supabase.from("aging_room_games").update({ round_number: finalRound ? 0 : 1, required_correct: finalRound ? 5 : (players || []).length <= 4 ? 3 : (players || []).length <= 6 ? 2 : 1 }).eq("id", activeGame.id);
+        activeGame = { ...activeGame, round_number: finalRound ? 0 : 1, required_correct: finalRound ? 5 : (players || []).length <= 4 ? 3 : (players || []).length <= 6 ? 2 : 1 };
+        if (finalRound) await supabase.from("aging_room_players").update({ status: "finalist" }).eq("game_id", activeGame.id);
       }
-      await setQuestion(supabase, activeGame, session, "question");
+      await setQuestion(supabase, activeGame, session, Number(activeGame.round_number) === 0 ? "bale_question" : "question");
       await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
       return NextResponse.json({ ok: true });
     }

@@ -31,6 +31,18 @@ export async function POST(request: Request) {
     if (!data.session || !data.control || !data.player || !data.game) return NextResponse.json({ ok: true });
     if (data.control.decision_player_id !== data.player.id || data.control.state !== "main_active") return NextResponse.json({ ok: true });
     const { session, game } = data; const now = new Date(); const elapsed = now.getTime() - new Date(game.phase_started_at || game.updated_at).getTime();
+    if (data.control.pending_action && ["question_result", "bale_result", "elimination"].includes(game.phase)) {
+      await supabase.from("aging_room_games").update({ status: "closed", phase: "ended_early", updated_at: now.toISOString() }).eq("id", game.id);
+      if (data.control.pending_action === "end_mode") {
+        await supabase.from("sessions").update({ game_mode: "main", question_status: "lobby", current_question_text: null, show_answer: false }).eq("id", sessionId);
+        await supabase.from("session_controls").update({ state: "lobby", pending_action: null, updated_at: now.toISOString() }).eq("session_id", sessionId);
+      } else {
+        await supabase.from("last_call_games").insert({ session_id: sessionId, phase: "voting", phase_started_at: now.toISOString() });
+        await supabase.from("sessions").update({ game_mode: "last_call", question_status: "last_call_voting", current_question_text: null, show_answer: false }).eq("id", sessionId);
+        await supabase.from("session_controls").update({ pending_action: null, updated_at: now.toISOString() }).eq("session_id", sessionId);
+      }
+      return NextResponse.json({ ok: true, ended: true });
+    }
     const { data: rows } = await supabase.from("aging_room_players").select("*").eq("game_id", game.id);
     const eligible = (rows || []).filter((row: any) => game.phase === "bale_question" ? row.status === "finalist" : row.status === "active");
     const setPhase = async (phase: string, extra: any = {}) => { await supabase.from("aging_room_games").update({ phase, phase_started_at: now.toISOString(), updated_at: now.toISOString(), ...extra }).eq("id", game.id); };

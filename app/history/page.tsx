@@ -37,6 +37,7 @@ export default function HistoryPage() {
   return (
     <main style={{ padding: "2rem", fontFamily: "Arial, sans-serif" }}>
       <h1>PCL Trivia Night History</h1>
+      <p><a href="/event">← Back to Bartender Console</a></p>
 
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
