@@ -13,3 +13,4 @@ export default function LastCallPanel({ lastCall, submit }: { lastCall: any; sub
   if (game.phase === "reveal") return <section className="event-card"><h2>Last Call answer</h2><p><strong>{game.correct_answer}</strong></p><p>Final scores are revealing now.</p><ol>{entries.map((item: any) => <li key={item.id}>{item.players?.display_name}: {item.is_revealed ? `${item.is_correct ? "Correct" : "Incorrect"} · ${item.final_score}` : "waiting…"}</li>)}</ol></section>;
   return <section className="event-card"><h2>Last Call complete</h2><p>Saving the final leaderboard…</p></section>;
 }
+

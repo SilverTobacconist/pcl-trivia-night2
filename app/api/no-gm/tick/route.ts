@@ -45,12 +45,15 @@ export async function POST(request: Request) {
     const { data: openDispute } = await supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").maybeSingle();
     if (openDispute) {
       if (now.getTime() < new Date(openDispute.closes_at).getTime()) return NextResponse.json({ ok: true });
-      const [{ data: votes }, { count: playerCount }, { data: answer }] = await Promise.all([
+      const [{ data: votes }, { count: playerCount }, { data: answer }, { data: controlVote }] = await Promise.all([
         supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id", openDispute.id),
         supabase.from("players").select("id", { count: "exact", head: true }).eq("session_id", sessionId),
         supabase.from("answers").select("id,player_id,is_correct,points_awarded").eq("id", openDispute.answer_id).single(),
+        supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id", openDispute.id).eq("player_id", control.decision_player_id).maybeSingle(),
       ]);
-      const approved = (votes || []).filter((vote: any) => vote.vote_yes).length > (playerCount || 0) / 2;
+      const yes = (votes || []).filter((vote: any) => vote.vote_yes).length;
+      const no = (votes || []).length - yes;
+      const approved = yes > no || (yes === no && controlVote?.vote_yes === true);
       await supabase.from("answer_disputes").update({ status: approved ? "approved" : "rejected", resolved_at: now.toISOString() }).eq("id", openDispute.id);
       if (approved && answer && !answer.is_correct) {
         const earned = pointsFor(session.current_difficulty);
@@ -72,6 +75,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, revealed: true });
     }
     if (session.question_status === "revealed" && session.question_ends_at && now.getTime() >= new Date(session.question_ends_at).getTime() + REVEAL_SECONDS * 1000) {
+      if (control.pending_action === "end_mode") {
+        await supabase.from("sessions").update({ game_mode: "main", question_status: "lobby", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
+        await supabase.from("session_controls").update({ state: "lobby", pending_action: null, updated_at: now.toISOString() }).eq("session_id", sessionId);
+        return NextResponse.json({ ok: true, endedMode: true });
+      }
+      if (control.pending_action === "end_session") {
+        const { error } = await supabase.from("last_call_games").insert({ session_id: sessionId, phase: "voting", phase_started_at: now.toISOString() });
+        if (error && error.code !== "23505") throw error;
+        await supabase.from("sessions").update({ game_mode: "last_call", question_status: "last_call_voting", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
+        await supabase.from("session_controls").update({ pending_action: null, updated_at: now.toISOString() }).eq("session_id", sessionId);
+        return NextResponse.json({ ok: true, lastCall: true });
+      }
       await supabase.from("sessions").update({ question_status: "ready", current_question_id: null, current_question_text: null, show_answer: false }).eq("id", sessionId);
       return NextResponse.json({ ok: true });
     }

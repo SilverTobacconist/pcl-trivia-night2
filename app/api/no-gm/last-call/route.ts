@@ -38,3 +38,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || "Could not update Last Call." }, { status: 500 });
   }
 }
+

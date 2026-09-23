@@ -58,9 +58,11 @@ export async function POST(request: Request) {
       const question = pool[Math.floor(Math.random() * pool.length)];
       const { error: historyError } = await supabase.from("question_history").insert({ question_id: question.question_id, session_id: sessionId, game_mode: "last_call", date_used: now.toISOString(), question_text: question.question_text, category: question.category, subcategory: question.subcategory, difficulty: question.difficulty, correct_answer: question.answer });
       if (historyError) throw historyError;
+      const { data: sessionPlayers } = await supabase.from("players").select("id,score").eq("session_id", sessionId).is("left_at", null);
+      const bonus = (sessionPlayers || []).some((participant: any) => Number(participant.score || 0) === 0) ? 5 : 0;
       for (const entry of participants) {
-        const { data: participant } = await supabase.from("players").select("score").eq("id", entry.player_id).single();
-        await supabase.from("last_call_entries").update({ starting_score: Number(participant?.score || 0) }).eq("game_id", game.id).eq("player_id", entry.player_id);
+        const participant = (sessionPlayers || []).find((row: any) => row.id === entry.player_id);
+        await supabase.from("last_call_entries").update({ starting_score: Number(participant?.score || 0) + bonus }).eq("game_id", game.id).eq("player_id", entry.player_id);
       }
       await phaseUpdate("wagering", { selected_difficulty: difficultyLabel(selected), category: question.category, subcategory: question.subcategory, question_id: question.question_id, question_text: question.question_text, correct_answer: question.answer, answer_aliases: question.answer_aliases });
       await supabase.from("sessions").update({ question_status: "last_call_wagering", current_question_id: question.question_id, current_category: question.category, current_subcategory: question.subcategory, current_difficulty: question.difficulty, current_question_text: null, current_answer: question.answer, current_answer_aliases: question.answer_aliases, show_answer: false }).eq("id", sessionId);

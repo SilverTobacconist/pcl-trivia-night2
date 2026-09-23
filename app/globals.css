@@ -85,7 +85,6 @@ button.button-clicked:not(:disabled) {
  .event-shell h1 { color: #e2b15c; margin-bottom: .25rem; }
  .event-card { background: #302519; padding: 1.25rem; border-radius: 14px; margin: 1rem 0; box-shadow: 0 2px 10px #0006; }
  .event-card input { display: block; box-sizing: border-box; width: 100%; margin: .6rem 0; padding: .85rem; border-radius: 8px; border: 1px solid #8d7651; background: #fff; color: #111; font-size: 1rem; }
- .event-card select { display: block; margin: .6rem 0; padding: .7rem; border-radius: 8px; color: #111; background: #fff; font-size: 1rem; }
  .event-shell button { margin: .35rem .35rem .35rem 0; border: 0; border-radius: 8px; background: #d99d3d; color: #1d1711; padding: .75rem 1rem; font-size: 1rem; font-weight: 700; cursor: pointer; }
  .event-shell a { color: #ffcc74; }
  .event-secondary-link { display: inline-block; margin: .35rem; padding: .75rem 1rem; border: 1px solid #d99d3d; border-radius: 8px; text-decoration: none; font-weight: 700; }
@@ -96,14 +95,9 @@ button.button-clicked:not(:disabled) {
  .event-result-correct, .event-result-wrong { padding: .85rem; border-radius: 8px; font-weight: 700; }
  .event-result-correct { background: #1f6a3b; }
  .event-result-wrong { background: #7d2929; }
- .event-button-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; }
- .event-outline-button { background: transparent !important; color: #f4b23c !important; border: 1px solid #f4b23c !important; }
  .event-display { min-height: 100vh; background: #14100c; color: #fff7e6; padding: 4vw; font-family: Arial, sans-serif; text-align: center; }
  .event-display h1 { color: #e2b15c; font-size: clamp(2rem, 5vw, 5rem); }
  .event-display h2 { font-size: clamp(2rem, 5vw, 4.5rem); max-width: 1200px; margin: 1.5rem auto; }
  .event-display ol { max-width: 800px; margin: 2rem auto; text-align: left; font-size: clamp(1.25rem, 3vw, 2.5rem); }
  .event-display li { display: flex; justify-content: space-between; padding: .3rem 0; }
  .event-answer { color: #ffcc74; font-size: clamp(1.5rem, 3vw, 3rem); }
- .event-display-qr { position: fixed; right: 1.25rem; bottom: 1.25rem; width: 180px; padding: .75rem; background: #fff; color: #17110b; text-align: center; border-radius: .6rem; box-shadow: 0 10px 30px #0008; z-index: 2; }
- .event-display-qr img { display: block; width: 100%; height: auto; margin-bottom: .4rem; }
- @media (max-width: 700px) { .event-display-qr { position: static; margin: 1rem auto; } }

@@ -26,3 +26,4 @@ export async function GET(request: Request) {
     playerWasFastest: Boolean(playerId && fastestCorrect?.player_id === playerId),
   }, { headers: { "Cache-Control": "no-store" } });
 }
+

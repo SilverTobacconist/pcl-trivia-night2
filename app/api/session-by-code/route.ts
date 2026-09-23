@@ -25,5 +25,6 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.json({ session });
+  const { data: control } = await supabase.from("session_controls").select("decision_player_id").eq("session_id", session.id).maybeSingle();
+  return NextResponse.json({ session, needsController: !control });
 }
