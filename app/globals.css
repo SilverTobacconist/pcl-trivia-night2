@@ -101,3 +101,8 @@ button.button-clicked:not(:disabled) {
  .event-display ol { max-width: 800px; margin: 2rem auto; text-align: left; font-size: clamp(1.25rem, 3vw, 2.5rem); }
  .event-display li { display: flex; justify-content: space-between; padding: .3rem 0; }
  .event-answer { color: #ffcc74; font-size: clamp(1.5rem, 3vw, 3rem); }
+ .rickhouse-board { display:grid; grid-template-columns:repeat(5,minmax(110px,1fr)); gap:.45rem; overflow-x:auto; }
+ .rickhouse-column { display:grid; gap:.35rem; text-align:center; }
+ .rickhouse-column strong { min-height:3.5rem; display:grid; place-items:center; color:#f3c75f; }
+ .rickhouse-column button { min-height:3.25rem; }
+ .rickhouse-used { opacity:.45; }
