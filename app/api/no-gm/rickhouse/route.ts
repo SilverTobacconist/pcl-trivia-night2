@@ -4,6 +4,8 @@ import { POST as startRickhouse } from "@/app/api/rickhouse/start/route";
 import { POST as selectPour } from "@/app/api/rickhouse/select-pour/route";
 import { POST as submitWager } from "@/app/api/rickhouse/submit-wager/route";
 import { POST as submitAnswer } from "@/app/api/rickhouse/submit-answer/route";
+import { POST as submitCaskWager } from "@/app/api/rickhouse/cask-strength/submit-wager/route";
+import { POST as submitCaskAnswer } from "@/app/api/rickhouse/cask-strength/submit-answer/route";
 
 function forwarded(body: any) { return new Request("http://internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
 
@@ -31,6 +33,8 @@ export async function POST(request: Request) {
       const { data: pour } = await supabase.from("rickhouse_pours").select("question_id").eq("id", game.current_pour_id).single();
       return submitAnswer(forwarded({ sessionId, playerId: player.id, questionId: pour?.question_id, submittedAnswer: String(value || "").trim() }));
     }
+    if (action === "cask_wager") return submitCaskWager(forwarded({ gameId: game.id, playerId: player.id, wager: value }));
+    if (action === "cask_answer") return submitCaskAnswer(forwarded({ gameId: game.id, playerId: player.id, answer: String(value || "").trim() }));
     return NextResponse.json({ error: "Unknown Rickhouse action." }, { status: 400 });
   } catch (error: any) { return NextResponse.json({ error: error.message || "Could not update Rickhouse." }, { status: 500 }); }
 }
