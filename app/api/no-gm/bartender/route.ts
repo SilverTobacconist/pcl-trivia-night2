@@ -8,6 +8,15 @@ async function endSession(sessionId: string) {
   await supabase.from("sessions").update({ status: "ended", game_mode: "complete", question_status: "closed", show_answer: false }).eq("id", sessionId);
 }
 
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const location = searchParams.get("location");
+  if (!["Hastings", "Norfolk"].includes(String(location))) return NextResponse.json({ error: "Choose Hastings or Norfolk." }, { status: 400 });
+  const { data: session, error } = await supabase.from("sessions").select("*").eq("location", location).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ session: session || null });
+}
+
 export async function POST(request: Request) {
   try {
     const { action, location, sessionId } = await request.json();
