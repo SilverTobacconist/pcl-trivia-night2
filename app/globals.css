@@ -135,3 +135,81 @@ button.button-clicked:not(:disabled) {
 .roper-trivia-display .event-display-qr { position: fixed; top: 1.5vw; right: 1.5vw; z-index: 2; max-width: 220px; padding: .8rem; background: #fff9e8; color: var(--roper-brown); border: 3px solid var(--roper-brown); box-shadow: 5px 5px 0 var(--roper-orange); font-family: Impact, "Arial Narrow Bold", sans-serif; letter-spacing: .04em; }
 .roper-trivia-display .event-display-qr img { display: block; width: min(16vw, 170px); min-width: 105px; margin: 0 auto .45rem; }
 .roper-trivia-display ol { background: #fff9e8cc; border: 3px solid var(--roper-brown); padding: 1rem 1.5rem; box-shadow: 7px 7px 0 var(--roper-teal); }
+
+/* Global event-template layer.  Remove the body class in app/layout.tsx to return every screen to the standard Paul’s presentation. */
+body.roper-romp-template {
+  --roper-cream: #fff1ca;
+  --roper-orange: #ee7e35;
+  --roper-brown: #3d211b;
+  --roper-teal: #177b7a;
+  color: var(--roper-brown) !important;
+  background: repeating-linear-gradient(145deg, #fff1ca 0 25px, #f7d890 25px 48px) !important;
+}
+body.roper-romp-template::before {
+  content: "Roper Trivia  •  Paul’s Cigar Lounge";
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: .42rem 1rem;
+  color: var(--roper-brown);
+  background: linear-gradient(90deg, var(--roper-orange) 0 25%, var(--roper-teal) 25% 50%, #f6b333 50% 75%, #d95a43 75%);
+  font-family: Impact, "Arial Narrow Bold", sans-serif;
+  letter-spacing: .1em;
+  text-align: center;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+body.roper-romp-template main {
+  box-sizing: border-box;
+  min-height: 100vh;
+  color: var(--roper-brown) !important;
+  background-color: var(--roper-cream) !important;
+  background-image: radial-gradient(circle at 8% 8%, #f6b333 0 4%, transparent 4.3%), radial-gradient(circle at 92% 4%, #df5c43 0 5%, transparent 5.3%), repeating-linear-gradient(145deg, #fff1ca 0 25px, #f7d890 25px 48px) !important;
+  font-family: Georgia, "Times New Roman", serif !important;
+  padding-top: max(2.7rem, env(safe-area-inset-top)) !important;
+}
+body.roper-romp-template main h1,
+body.roper-romp-template main h2,
+body.roper-romp-template main h3,
+body.roper-romp-template main h4 {
+  color: var(--roper-brown) !important;
+  font-family: "Cooper Black", "Arial Rounded MT Bold", Georgia, serif !important;
+  text-shadow: 2px 2px 0 #f6b333;
+}
+body.roper-romp-template main a { color: var(--roper-teal) !important; font-weight: 800; }
+body.roper-romp-template main section,
+body.roper-romp-template main > div,
+body.roper-romp-template main [style*="background"] {
+  border-color: var(--roper-brown) !important;
+}
+body.roper-romp-template main section,
+body.roper-romp-template main [style*="background"]:not(button) {
+  background: #fff9e8 !important;
+  color: var(--roper-brown) !important;
+  box-shadow: 5px 5px 0 var(--roper-orange) !important;
+}
+body.roper-romp-template main button,
+body.roper-romp-template main input[type="submit"],
+body.roper-romp-template main input[type="button"] {
+  background: var(--roper-orange) !important;
+  color: #2a1714 !important;
+  border: 2px solid var(--roper-brown) !important;
+  border-radius: 8px !important;
+  box-shadow: 2px 2px 0 var(--roper-brown) !important;
+  font-family: Impact, "Arial Narrow Bold", sans-serif !important;
+  letter-spacing: .04em;
+}
+body.roper-romp-template main input,
+body.roper-romp-template main textarea,
+body.roper-romp-template main select {
+  background: #fffdf5 !important;
+  color: var(--roper-brown) !important;
+  border: 2px solid var(--roper-brown) !important;
+}
+body.roper-romp-template main table,
+body.roper-romp-template main th,
+body.roper-romp-template main td { color: var(--roper-brown) !important; border-color: var(--roper-teal) !important; }
+body.roper-romp-template .event-card,
+body.roper-romp-template .event-display-qr { background: #fff9e8 !important; color: var(--roper-brown) !important; }

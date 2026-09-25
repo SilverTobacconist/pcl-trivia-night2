@@ -4,6 +4,8 @@ import { Inter } from 'next/font/google';
 import ButtonClickFeedback from './ButtonClickFeedback';
 
 const inter = Inter({ subsets: ['latin'] });
+// Keep the permanent Paul’s styles in globals.css.  Event looks are additive layers.
+const activeEventTemplate = 'roper-romp-template';
 
 export const metadata: Metadata = {
   title: 'Create Next App',
@@ -32,7 +34,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${inter.className} ${activeEventTemplate}`}>
         <ButtonClickFeedback />
         {children}
       </body>
