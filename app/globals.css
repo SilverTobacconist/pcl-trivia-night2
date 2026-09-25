@@ -132,8 +132,8 @@ button.button-clicked:not(:disabled) {
 .roper-trivia .event-result-correct { background: var(--roper-teal); color: #fff; }
 .roper-trivia-display { text-align: center; }
 .roper-trivia-display h2 { color: var(--roper-brown); }
-.roper-trivia-display .event-display-qr { position: fixed; top: 1.5vw; right: 1.5vw; z-index: 2; max-width: 220px; padding: .8rem; background: #fff9e8; color: var(--roper-brown); border: 3px solid var(--roper-brown); box-shadow: 5px 5px 0 var(--roper-orange); font-family: Impact, "Arial Narrow Bold", sans-serif; letter-spacing: .04em; }
-.roper-trivia-display .event-display-qr img { display: block; width: min(16vw, 170px); min-width: 105px; margin: 0 auto .45rem; }
+.roper-trivia-display .event-display-qr { position: static; z-index: auto; width: fit-content; max-width: min(92vw, 280px); margin: 0 auto 1rem; padding: .8rem; background: #fff9e8; color: var(--roper-brown); border: 3px solid var(--roper-brown); box-shadow: 5px 5px 0 var(--roper-orange); font-family: Impact, "Arial Narrow Bold", sans-serif; letter-spacing: .04em; }
+.roper-trivia-display .event-display-qr img { display: block; width: min(34vw, 170px); min-width: 105px; margin: 0 auto .45rem; }
 .roper-trivia-display ol { background: #fff9e8cc; border: 3px solid var(--roper-brown); padding: 1rem 1.5rem; box-shadow: 7px 7px 0 var(--roper-teal); }
 
 /* Global event-template layer.  Remove the body class in app/layout.tsx to return every screen to the standard Paul’s presentation. */
@@ -213,3 +213,4 @@ body.roper-romp-template main th,
 body.roper-romp-template main td { color: var(--roper-brown) !important; border-color: var(--roper-teal) !important; }
 body.roper-romp-template .event-card,
 body.roper-romp-template .event-display-qr { background: #fff9e8 !important; color: var(--roper-brown) !important; }
+body.roper-romp-template .roper-trivia-display .event-display-qr { position: static !important; top: auto !important; right: auto !important; margin: 0 auto 1rem !important; }
