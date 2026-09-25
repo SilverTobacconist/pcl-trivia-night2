@@ -67,7 +67,17 @@ export async function POST(request: Request) {
     }
     if (action === "start_main") {
       const { error } = await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId); if (error) throw error;
+      await supabase.from("session_controls").update({ keyword_trivia_term: null, keyword_trivia_frequency: null, main_question_count: 0 }).eq("session_id", sessionId);
       await supabase.from("sessions").update({ game_mode: "main", question_status: "ready", current_question_id: null, current_question_text: null, show_answer: false }).eq("id", sessionId);
+      return NextResponse.json({ ok: true });
+    }
+    if (action === "start_keyword_trivia") {
+      const term = String(body.keywordTerm || "").trim(); const frequency = Number(body.keywordFrequency);
+      if (!term) return NextResponse.json({ error: "Enter the category or subcategory word to feature." }, { status: 400 });
+      if (!Number.isInteger(frequency) || frequency < 1 || frequency > 20) return NextResponse.json({ error: "Choose a frequency between every question and every 20th question." }, { status: 400 });
+      const { error } = await supabase.from("session_controls").update({ state: "main_active", keyword_trivia_term: term, keyword_trivia_frequency: frequency, main_question_count: 0, last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+      if (error) throw error;
+      await supabase.from("sessions").update({ game_mode: "keyword_trivia", question_status: "ready", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
       return NextResponse.json({ ok: true });
     }
     if (action === "end_session" || action === "end") {

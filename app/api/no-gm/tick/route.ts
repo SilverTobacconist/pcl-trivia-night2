@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (session.question_status !== "ready") return NextResponse.json({ ok: true });
-    const usedIds = await usedQuestionIdsForLocation(supabase, session.location, ["main", "last_call"]);
+    const usedIds = await usedQuestionIdsForLocation(supabase, session.location, ["main", "keyword_trivia", "last_call"]);
     const candidates = (await loadQuestions()).filter((question: any) => question.question_id && question.question_text && !usedIds.has(question.question_id));
     if (!candidates.length) {
       await exportLeaderboard(supabase, sessionId, "completed");
@@ -99,8 +99,14 @@ export async function POST(request: Request) {
       await supabase.from("sessions").update({ status: "ended", game_mode: "complete", question_status: "closed" }).eq("id", sessionId);
       return NextResponse.json({ ok: true, ended: true });
     }
-    const question = candidates[Math.floor(Math.random() * candidates.length)]; const endsAt = new Date(now.getTime() + QUESTION_SECONDS * 1000);
-    await supabase.from("question_history").insert({ question_id: question.question_id, session_id: sessionId, game_mode: "main", date_used: now.toISOString(), question_text: question.question_text, category: question.category, subcategory: question.subcategory, difficulty: question.difficulty, correct_answer: question.answer });
+    const questionNumber = Number(control.main_question_count || 0) + 1;
+    const frequency = Number(control.keyword_trivia_frequency || 0);
+    const keyword = String(control.keyword_trivia_term || "").trim().toLowerCase();
+    const shouldFeatureKeyword = session.game_mode === "keyword_trivia" && keyword && frequency > 0 && questionNumber % frequency === 0;
+    const keywordCandidates = shouldFeatureKeyword ? candidates.filter((question: any) => `${question.category || ""} ${question.subcategory || ""}`.toLowerCase().includes(keyword)) : [];
+    const pool = keywordCandidates.length ? keywordCandidates : candidates;
+    const question = pool[Math.floor(Math.random() * pool.length)]; const endsAt = new Date(now.getTime() + QUESTION_SECONDS * 1000);
+    await supabase.from("question_history").insert({ question_id: question.question_id, session_id: sessionId, game_mode: session.game_mode === "keyword_trivia" ? "keyword_trivia" : "main", date_used: now.toISOString(), question_text: question.question_text, category: question.category, subcategory: question.subcategory, difficulty: question.difficulty, correct_answer: question.answer });
     await supabase.from("sessions").update({ current_question_id: question.question_id, current_question_text: question.question_text, current_category: question.category, current_subcategory: question.subcategory, current_difficulty: question.difficulty, current_answer: question.answer, current_answer_aliases: question.answer_aliases, question_started_at: now.toISOString(), question_ends_at: endsAt.toISOString(), question_duration_seconds: QUESTION_SECONDS, question_status: "active", show_answer: false }).eq("id", sessionId);
     await supabase.from("session_controls").update({ main_question_count: Number(control.main_question_count || 0) + 1, updated_at: now.toISOString() }).eq("session_id", sessionId);
     return NextResponse.json({ ok: true, questionStarted: true });
