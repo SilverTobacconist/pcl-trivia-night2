@@ -107,3 +107,31 @@ button.button-clicked:not(:disabled) {
  .rickhouse-column strong { min-height:3.5rem; display:grid; place-items:center; color:#f3c75f; }
  .rickhouse-column button { min-height:3.25rem; }
  .rickhouse-used { opacity:.45; }
+
+/* Temporary Roper Romp presentation for player and public-display screens. */
+.roper-trivia, .roper-trivia-display {
+  --roper-cream: #fff1ca;
+  --roper-orange: #ee7e35;
+  --roper-brown: #3d211b;
+  --roper-teal: #177b7a;
+  color: var(--roper-brown);
+  background-color: var(--roper-cream);
+  background-image: radial-gradient(circle at 8% 8%, #f6b333 0 4%, transparent 4.3%), radial-gradient(circle at 92% 4%, #df5c43 0 5%, transparent 5.3%), repeating-linear-gradient(145deg, #fff1ca 0 25px, #f7d890 25px 48px);
+  font-family: Georgia, "Times New Roman", serif;
+}
+.roper-trivia::before, .roper-trivia-display::before { content: ""; display: block; height: 12px; margin: -2rem -1rem 1.5rem; background: linear-gradient(90deg, var(--roper-orange) 0 25%, var(--roper-teal) 25% 50%, #f6b333 50% 75%, #d95a43 75%); }
+.roper-trivia-display::before { margin: -4vw -4vw 2vw; height: 18px; }
+.roper-trivia h1, .roper-trivia-display h1 { color: var(--roper-brown); font-family: "Cooper Black", "Arial Rounded MT Bold", Georgia, serif; letter-spacing: .02em; text-shadow: 2px 2px 0 #f6b333; }
+.roper-trivia-kicker { color: var(--roper-teal); font-family: Impact, "Arial Narrow Bold", sans-serif; letter-spacing: .12em; text-transform: uppercase; font-size: .78rem; margin: 0 0 .3rem; }
+.roper-trivia .event-card { background: #fff9e8; border: 3px solid var(--roper-brown); box-shadow: 7px 7px 0 var(--roper-orange); }
+.roper-trivia .event-card h2 { color: var(--roper-teal); }
+.roper-trivia button { background: var(--roper-orange); color: #2a1714; border: 2px solid var(--roper-brown); box-shadow: 2px 2px 0 var(--roper-brown); }
+.roper-trivia .event-outline-button { background: var(--roper-cream); color: var(--roper-brown); }
+.roper-trivia .event-timer, .roper-trivia .event-answer, .roper-trivia-display .event-answer { color: var(--roper-teal); }
+.roper-trivia .event-locked-answer { background: #f8d878; color: var(--roper-brown); }
+.roper-trivia .event-result-correct { background: var(--roper-teal); color: #fff; }
+.roper-trivia-display { text-align: center; }
+.roper-trivia-display h2 { color: var(--roper-brown); }
+.roper-trivia-display .event-display-qr { position: fixed; top: 1.5vw; right: 1.5vw; z-index: 2; max-width: 220px; padding: .8rem; background: #fff9e8; color: var(--roper-brown); border: 3px solid var(--roper-brown); box-shadow: 5px 5px 0 var(--roper-orange); font-family: Impact, "Arial Narrow Bold", sans-serif; letter-spacing: .04em; }
+.roper-trivia-display .event-display-qr img { display: block; width: min(16vw, 170px); min-width: 105px; margin: 0 auto .45rem; }
+.roper-trivia-display ol { background: #fff9e8cc; border: 3px solid var(--roper-brown); padding: 1rem 1.5rem; box-shadow: 7px 7px 0 var(--roper-teal); }
