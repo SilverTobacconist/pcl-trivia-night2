@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       supabase.from("last_call_games").select("*").eq("session_id", sessionId).is("completed_at", null).maybeSingle(),
     ]);
     if (!session || !control || !player || !game) return NextResponse.json({ error: "Last Call was not found." }, { status: 404 });
-    if (control.decision_player_id !== player.id || control.state !== "main_active") return NextResponse.json({ ok: true });
+    if (control.state !== "main_active") return NextResponse.json({ ok: true });
     const now = new Date();
     const elapsed = now.getTime() - new Date(game.phase_started_at || game.created_at).getTime();
     const { data: entries } = await supabase.from("last_call_entries").select("*").eq("game_id", game.id);

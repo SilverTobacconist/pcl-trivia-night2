@@ -5,7 +5,6 @@ import { usedQuestionIdsForLocation } from "@/lib/noGmQuestions";
 
 const QUESTION_SECONDS = 60;
 const REVEAL_SECONDS = 15;
-const INACTIVITY_MS = 10 * 60 * 1000;
 
 function pointsFor(difficulty: string | null) {
   const value = String(difficulty || "").toLowerCase();
@@ -29,18 +28,8 @@ export async function POST(request: Request) {
       supabase.from("sessions").select("*").eq("id", sessionId).single(),
     ]);
     if (!player || !control || !session) return NextResponse.json({ error: "Game not found." }, { status: 404 });
-    if (control.decision_player_id !== player.id || control.state !== "main_active") return NextResponse.json({ ok: true });
+    if (control.state !== "main_active") return NextResponse.json({ ok: true });
     const now = new Date();
-    const [{ data: newestAnswer }, { data: newestVote }] = await Promise.all([
-      supabase.from("answers").select("submitted_at").eq("session_id", sessionId).order("submitted_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("answer_dispute_votes").select("voted_at,answer_disputes!inner(session_id)").eq("answer_disputes.session_id", sessionId).order("voted_at", { ascending: false }).limit(1).maybeSingle(),
-    ]);
-    const activityTimes = [control.last_activity_at, newestAnswer?.submitted_at, newestVote?.voted_at].filter(Boolean).map((value: string) => new Date(value).getTime());
-    const lastActivity = Math.max(...activityTimes);
-    if (now.getTime() - lastActivity >= INACTIVITY_MS) {
-      await supabase.from("session_controls").update({ state: "timeout", timeout_at: now.toISOString(), updated_at: now.toISOString() }).eq("session_id", sessionId);
-      return NextResponse.json({ ok: true, timeout: true });
-    }
     const { data: openDispute } = await supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle();
     if (openDispute) {
       if (now.getTime() < new Date(openDispute.closes_at).getTime()) return NextResponse.json({ ok: true });
@@ -53,7 +42,8 @@ export async function POST(request: Request) {
       const yes = (votes || []).filter((vote: any) => vote.vote_yes).length;
       const no = (votes || []).length - yes;
       const approved = yes > no || (yes === no && controlVote?.vote_yes === true);
-      await supabase.from("answer_disputes").update({ status: approved ? "approved" : "rejected", resolved_at: now.toISOString() }).eq("id", openDispute.id);
+      const { data: resolved } = await supabase.from("answer_disputes").update({ status: approved ? "approved" : "rejected", resolved_at: now.toISOString() }).eq("id", openDispute.id).eq("status", "open").select("id").maybeSingle();
+      if (!resolved) return NextResponse.json({ ok: true });
       if (approved && answer && !answer.is_correct) {
         const earned = pointsFor(session.current_difficulty);
         await supabase.from("answers").update({ is_correct: true, points_awarded: earned }).eq("id", answer.id);
@@ -63,6 +53,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, disputeResolved: true });
     }
     if (session.question_status === "active" && session.question_ends_at && now.getTime() >= new Date(session.question_ends_at).getTime()) {
+      const { data: claimed } = await supabase.from("sessions").update({ question_status: "grading" }).eq("id", sessionId).eq("question_status", "active").select("id").maybeSingle();
+      if (!claimed) return NextResponse.json({ ok: true });
       const { data: answers } = await supabase.from("answers").select("id,player_id,submitted_answer,is_correct").eq("session_id", sessionId).eq("question_id", session.current_question_id);
       const accepted = [session.current_answer, ...(String(session.current_answer_aliases || "").split(/[;,]/))].filter(Boolean).map((answer: string) => normalizeAnswer(answer));
       for (const answer of answers || []) {
@@ -70,10 +62,10 @@ export async function POST(request: Request) {
         await supabase.from("answers").update({ is_correct: correct, points_awarded: earned }).eq("id", answer.id);
         if (correct) { const { data: owner } = await supabase.from("players").select("score").eq("id", answer.player_id).single(); await supabase.from("players").update({ score: Number(owner?.score || 0) + earned }).eq("id", answer.player_id); }
       }
-      await supabase.from("sessions").update({ question_status: "revealed", show_answer: true }).eq("id", sessionId);
+      await supabase.from("sessions").update({ question_status: "revealed", question_ends_at: new Date(now.getTime() + REVEAL_SECONDS * 1000).toISOString(), show_answer: true }).eq("id", sessionId);
       return NextResponse.json({ ok: true, revealed: true });
     }
-    if (session.question_status === "revealed" && session.question_ends_at && now.getTime() >= new Date(session.question_ends_at).getTime() + REVEAL_SECONDS * 1000) {
+    if (session.question_status === "revealed" && session.question_ends_at && now.getTime() >= new Date(session.question_ends_at).getTime()) {
       if (control.pending_action === "end_mode") {
         await supabase.from("sessions").update({ game_mode: "main", question_status: "lobby", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
         await supabase.from("session_controls").update({ state: "lobby", pending_action: null, updated_at: now.toISOString() }).eq("session_id", sessionId);
@@ -86,10 +78,12 @@ export async function POST(request: Request) {
         await supabase.from("session_controls").update({ pending_action: null, updated_at: now.toISOString() }).eq("session_id", sessionId);
         return NextResponse.json({ ok: true, lastCall: true });
       }
-      await supabase.from("sessions").update({ question_status: "ready", current_question_id: null, current_question_text: null, show_answer: false }).eq("id", sessionId);
+      await supabase.from("sessions").update({ question_status: "ready", current_question_id: null, current_question_text: null, show_answer: false }).eq("id", sessionId).eq("question_status", "revealed");
       return NextResponse.json({ ok: true });
     }
     if (session.question_status !== "ready") return NextResponse.json({ ok: true });
+    const { data: starting } = await supabase.from("sessions").update({ question_status: "loading" }).eq("id", sessionId).eq("question_status", "ready").select("id").maybeSingle();
+    if (!starting) return NextResponse.json({ ok: true });
     const allQuestions = (await loadQuestions()).filter((question: any) => question.question_id && question.question_text);
     const usedIds = await usedQuestionIdsForLocation(supabase, session.location, ["main", "last_call"]);
     const candidates = allQuestions.filter((question: any) => !usedIds.has(question.question_id));
@@ -127,7 +121,8 @@ export async function POST(request: Request) {
     const question = pool[Math.floor(Math.random() * pool.length)]; const endsAt = new Date(now.getTime() + QUESTION_SECONDS * 1000);
     await supabase.from("question_history").insert({ question_id: question.question_id, session_id: sessionId, game_mode: historyMode, date_used: now.toISOString(), question_text: question.question_text, category: question.category, subcategory: question.subcategory, difficulty: question.difficulty, correct_answer: question.answer });
     await supabase.from("sessions").update({ current_question_id: question.question_id, current_question_text: question.question_text, current_category: question.category, current_subcategory: question.subcategory, current_difficulty: question.difficulty, current_answer: question.answer, current_answer_aliases: question.answer_aliases, question_started_at: now.toISOString(), question_ends_at: endsAt.toISOString(), question_duration_seconds: QUESTION_SECONDS, question_status: "active", show_answer: false }).eq("id", sessionId);
-    await supabase.from("session_controls").update({ main_question_count: Number(control.main_question_count || 0) + 1, updated_at: now.toISOString() }).eq("session_id", sessionId);
+    const { error: countError } = await supabase.rpc("advance_no_gm_question_count", { p_session_id: sessionId, p_next_count: Number(control.main_question_count || 0) + 1 });
+    if (countError) throw countError;
     return NextResponse.json({ ok: true, questionStarted: true });
   } catch (error: any) { return NextResponse.json({ error: error.message || "Could not advance game." }, { status: 500 }); }
 }

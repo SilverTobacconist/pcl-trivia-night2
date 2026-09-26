@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   try {
     const { supabase, user } = await requireAnonymousPlayer(request); const { sessionId } = await request.json(); const data = await load(supabase, sessionId, user.id);
     if (!data.session || !data.control || !data.player || !data.game) return NextResponse.json({ ok: true });
-    if (data.control.decision_player_id !== data.player.id || data.control.state !== "main_active") return NextResponse.json({ ok: true });
+    if (data.control.state !== "main_active") return NextResponse.json({ ok: true });
     const { session, game } = data; const now = new Date(); const elapsed = now.getTime() - new Date(game.phase_started_at || game.updated_at).getTime();
     if (data.control.pending_action && ["question_result", "bale_result", "elimination"].includes(game.phase)) {
       await supabase.from("aging_room_games").update({ status: "closed", phase: "ended_early", updated_at: now.toISOString() }).eq("id", game.id);
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     }
     const { data: rows } = await supabase.from("aging_room_players").select("*").eq("game_id", game.id);
     const eligible = (rows || []).filter((row: any) => game.phase === "bale_question" ? row.status === "finalist" : row.status === "active");
-    const setPhase = async (phase: string, extra: any = {}) => { await supabase.from("aging_room_games").update({ phase, phase_started_at: now.toISOString(), updated_at: now.toISOString(), ...extra }).eq("id", game.id); };
+    const setPhase = async (phase: string, extra: any = {}) => { const seconds = ["question_result", "bale_result"].includes(phase) ? RESULT_MS / 1000 : phase === "elimination" ? ELIMINATION_MS / 1000 : 0; await supabase.from("aging_room_games").update({ phase, phase_started_at: now.toISOString(), updated_at: now.toISOString(), ...extra }).eq("id", game.id); if (seconds) await supabase.from("sessions").update({ question_ends_at: new Date(now.getTime() + seconds * 1000).toISOString(), question_duration_seconds: seconds }).eq("id", sessionId); };
     if (["question", "bale_question"].includes(game.phase)) {
       const { data: answers } = await supabase.from("aging_room_answers").select("*").eq("game_id", game.id).eq("question_number", game.question_number).eq("attempt_number", game.attempt_number).order("submitted_at");
       const allAnswered = eligible.length > 0 && (answers || []).filter((answer: any) => answer.competitive).length >= eligible.length;

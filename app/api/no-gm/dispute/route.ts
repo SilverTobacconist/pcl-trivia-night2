@@ -8,7 +8,8 @@ export async function POST(request: Request) {
     const { data: player } = await supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", user.id).single();
     if (!player) return NextResponse.json({ error: "Player not found." }, { status: 404 });
     if (action === "open") {
-      const { data: session } = await supabase.from("sessions").select("current_question_id,question_status").eq("id", sessionId).single();
+      const { data: session } = await supabase.from("sessions").select("current_question_id,question_status,game_mode").eq("id", sessionId).single();
+      if (session?.game_mode === "keyword_trivia") return NextResponse.json({ error: "Keyword Trivia answers are final and cannot be disputed." }, { status: 403 });
       if (!session?.current_question_id || session.question_status !== "revealed") return NextResponse.json({ error: "Disputes open after the answer is revealed." }, { status: 403 });
       const { data: answer } = await supabase.from("answers").select("id,is_correct").eq("session_id", sessionId).eq("player_id", player.id).eq("question_id", session.current_question_id).maybeSingle();
       if (!answer || answer.is_correct) return NextResponse.json({ error: "Only an uncounted answer can be disputed." }, { status: 403 });

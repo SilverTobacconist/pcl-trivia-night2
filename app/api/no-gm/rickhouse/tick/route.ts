@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       supabase.from("rickhouse_games").select("*").eq("session_id", sessionId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("sessions").select("*").eq("id", sessionId).single(),
     ]);
-    if (!player || control?.decision_player_id !== player.id || !game || !session) return NextResponse.json({ ok: true });
+    if (!player || control?.state !== "main_active" || !game || !session) return NextResponse.json({ ok: true });
     const expired = !session.question_ends_at || Date.now() >= new Date(session.question_ends_at).getTime();
     if (["question", "angels_question"].includes(game.game_phase) && expired) {
       const [{ data: pour }, { data: answers }] = await Promise.all([
