@@ -12,13 +12,23 @@ export async function GET(request: Request) {
     supabase.from("sessions").select("*").eq("id", sessionId).single(),
     supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("players").select("id,display_name,score,left_at").eq("session_id", sessionId).order("score", { ascending: false }).order("display_name"),
-    supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").maybeSingle(),
+    supabase.from("answer_disputes").select("id,answer_id,closes_at").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle(),
     supabase.from("session_leaderboard_exports").select("*").eq("session_id", sessionId).maybeSingle(),
     authData.user ? supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", authData.user.id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const { data: myAnswer } = currentPlayer && session?.current_question_id
     ? await supabase.from("answers").select("submitted_answer,is_correct,points_awarded").eq("session_id", sessionId).eq("player_id", currentPlayer.id).eq("question_id", session.current_question_id).maybeSingle()
     : { data: null };
+  const { data: disputedAnswer } = disputes
+    ? await supabase.from("answers").select("submitted_answer").eq("id", disputes.answer_id).maybeSingle()
+    : { data: null };
+  const dispute = disputes ? {
+    id: disputes.id,
+    closes_at: disputes.closes_at,
+    questionText: session?.current_question_text || "",
+    correctAnswer: session?.current_answer || "",
+    submittedAnswer: disputedAnswer?.submitted_answer || "",
+  } : null;
   const { data: lastCallGame } = session?.game_mode === "last_call"
     ? await supabase.from("last_call_games").select("*").eq("session_id", sessionId).is("completed_at", null).maybeSingle()
     : { data: null };
@@ -41,5 +51,5 @@ export async function GET(request: Request) {
   const { data: caskEntries } = rickhouseGame?.game_phase?.startsWith("cask_strength") ? await supabase.from("rickhouse_cask_strength_entries").select("*").eq("game_id", rickhouseGame.id).order("reveal_order") : { data: [] };
   const standings = (rickhouseScores || []).map((row: any) => ({ ...row, player_name: (rickhouseNames || []).find((p: any) => p.id === row.player_id)?.display_name || "Unknown" }));
   const rickhouse = rickhouseGame ? { game: rickhouseGame, pours: rickhousePours || [], standings, activePour, myAnswer: rickhouseAnswer || null, myScore: (rickhouseScores || []).find((row: any) => row.player_id === currentPlayer?.id)?.score || 0, caskEntries: caskEntries || [], myCaskEntry: (caskEntries || []).find((entry: any) => entry.player_id === currentPlayer?.id) || null } : null;
-  return NextResponse.json({ session, control, players: players || [], dispute: disputes || null, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null, aging: agingGame ? { game: agingGame, players: agingPlayers || [], entry: agingEntry || null } : null, rickhouse }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ session, control, players: players || [], dispute, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null, aging: agingGame ? { game: agingGame, players: agingPlayers || [], entry: agingEntry || null } : null, rickhouse }, { headers: { "Cache-Control": "no-store" } });
 }

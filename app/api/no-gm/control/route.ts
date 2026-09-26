@@ -33,8 +33,8 @@ export async function POST(request: Request) {
         }
         const next = (remaining || []).find((candidate: any) => candidate.id === body.targetPlayerId);
         if (!next) return NextResponse.json({ error: "Choose who will become the new Decision Player before leaving." }, { status: 400 });
-        await supabase.from("players").update({ left_at: new Date().toISOString() }).eq("id", player.id);
-        await supabase.from("session_controls").update({ decision_player_id: next.id, updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+        const { error } = await supabase.rpc("transfer_no_gm_control", { p_session_id: sessionId, p_target_player_id: next.id, p_leave_current: true });
+        if (error) throw error;
         return NextResponse.json({ ok: true, passedTo: next.id });
       }
       await supabase.from("players").update({ left_at: new Date().toISOString() }).eq("id", player.id);
@@ -44,7 +44,8 @@ export async function POST(request: Request) {
     if (action === "pass_control") {
       const { data: target } = await supabase.from("players").select("id").eq("id", body.targetPlayerId).eq("session_id", sessionId).is("left_at", null).maybeSingle();
       if (!target) return NextResponse.json({ error: "Choose a player who is still in this game." }, { status: 400 });
-      await supabase.from("session_controls").update({ decision_player_id: target.id, updated_at: new Date().toISOString() }).eq("session_id", sessionId);
+      const { error } = await supabase.rpc("transfer_no_gm_control", { p_session_id: sessionId, p_target_player_id: target.id, p_leave_current: false });
+      if (error) throw error;
       return NextResponse.json({ ok: true });
     }
     if (action === "skip_question") {

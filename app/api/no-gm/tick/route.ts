@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       await supabase.from("session_controls").update({ state: "timeout", timeout_at: now.toISOString(), updated_at: now.toISOString() }).eq("session_id", sessionId);
       return NextResponse.json({ ok: true, timeout: true });
     }
-    const { data: openDispute } = await supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").maybeSingle();
+    const { data: openDispute } = await supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle();
     if (openDispute) {
       if (now.getTime() < new Date(openDispute.closes_at).getTime()) return NextResponse.json({ ok: true });
       const [{ data: votes }, { count: playerCount }, { data: answer }, { data: controlVote }] = await Promise.all([
