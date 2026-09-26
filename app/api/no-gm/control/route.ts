@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const { supabase, user } = await requireAnonymousPlayer(request); const body = await request.json();
     const { sessionId, action } = body;
     const { data: player } = await supabase.from("players").select("id,left_at").eq("session_id", sessionId).eq("auth_user_id", user.id).single();
-    const { data: control } = await supabase.from("session_controls").select("*").eq("session_id", sessionId).single();
+    const { data: control } = await supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
     if (!player || !control) return NextResponse.json({ error: "Game player not found." }, { status: 404 });
     if (player.left_at) return NextResponse.json({ error: "You have left this game." }, { status: 403 });
     const isDecisionPlayer = control.decision_player_id === player.id;

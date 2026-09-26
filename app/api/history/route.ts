@@ -16,5 +16,5 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ sessions });
+  return NextResponse.json({ sessions }, { headers: { "Cache-Control": "no-store, max-age=0" } });
 }

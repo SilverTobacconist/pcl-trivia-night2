@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       await supabase.from("players").update({ left_at: null }).eq("id", player.id);
       player.left_at = null;
     }
-    let { data: control } = await supabase.from("session_controls").select("*").eq("session_id", session.id).maybeSingle();
+    let { data: control } = await supabase.from("session_controls").select("*").eq("session_id", session.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
     if (control?.state === "timeout") {
       // Do not read this update back with .single(): an old session can contain
       // duplicate control rows, and PostgREST then refuses to coerce the result

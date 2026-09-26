@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const { sessionId, action, value } = await request.json();
     const [{ data: player }, { data: control }, { data: game }] = await Promise.all([
       supabase.from("players").select("id,left_at").eq("session_id", sessionId).eq("auth_user_id", user.id).single(),
-      supabase.from("session_controls").select("*").eq("session_id", sessionId).single(),
+      supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("rickhouse_games").select("*").eq("session_id", sessionId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (!player || player.left_at || !control) return NextResponse.json({ error: "Game player not found." }, { status: 404 });

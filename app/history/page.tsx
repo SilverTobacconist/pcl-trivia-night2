@@ -9,7 +9,7 @@ export default function HistoryPage() {
   async function loadHistory() {
     setError("");
 
-    const response = await fetch("/api/history");
+    const response = await fetch("/api/history", { cache: "no-store" });
     const data = await response.json();
 
     if (!response.ok) {
@@ -38,6 +38,7 @@ export default function HistoryPage() {
     <main style={{ padding: "2rem", fontFamily: "Arial, sans-serif" }}>
       <h1>PCL Trivia Night History</h1>
       <p><a href="/event">← Back to Bartender Console</a></p>
+      <button type="button" onClick={loadHistory}>Refresh leaderboards</button>
 
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
@@ -89,7 +90,7 @@ export default function HistoryPage() {
                   {session.host_name}
                 </td>
                 <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
-                  {session.status}
+                  {session.status === "active" ? "Active now" : session.status}
                 </td>
               </tr>
             ))}

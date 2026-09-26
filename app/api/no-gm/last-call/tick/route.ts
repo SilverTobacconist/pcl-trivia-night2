@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const { sessionId } = await request.json();
     const [{ data: session }, { data: control }, { data: player }, { data: game }] = await Promise.all([
       supabase.from("sessions").select("*").eq("id", sessionId).single(),
-      supabase.from("session_controls").select("*").eq("session_id", sessionId).single(),
+      supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", user.id).single(),
       supabase.from("last_call_games").select("*").eq("session_id", sessionId).is("completed_at", null).maybeSingle(),
     ]);

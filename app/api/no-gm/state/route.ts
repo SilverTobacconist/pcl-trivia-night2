@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const { data: authData } = token ? await supabase.auth.getUser(token) : { data: { user: null } };
   const [{ data: session }, { data: control }, { data: players }, { data: disputes }, { data: leaderboardExport }, { data: currentPlayer }] = await Promise.all([
     supabase.from("sessions").select("*").eq("id", sessionId).single(),
-    supabase.from("session_controls").select("*").eq("session_id", sessionId).maybeSingle(),
+    supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("players").select("id,display_name,score,left_at").eq("session_id", sessionId).order("score", { ascending: false }).order("display_name"),
     supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").maybeSingle(),
     supabase.from("session_leaderboard_exports").select("*").eq("session_id", sessionId).maybeSingle(),

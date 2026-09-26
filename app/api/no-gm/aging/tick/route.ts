@@ -20,7 +20,7 @@ async function nextQuestion(supabase: any, game: any, session: any, phase: "ques
 
 async function load(supabase: any, sessionId: string, userId: string) {
   const [{ data: session }, { data: control }, { data: player }, { data: game }] = await Promise.all([
-    supabase.from("sessions").select("*").eq("id", sessionId).single(), supabase.from("session_controls").select("*").eq("session_id", sessionId).single(), supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", userId).single(), supabase.from("aging_room_games").select("*").eq("session_id", sessionId).eq("status", "active").maybeSingle(),
+    supabase.from("sessions").select("*").eq("id", sessionId).single(), supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(), supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", userId).single(), supabase.from("aging_room_games").select("*").eq("session_id", sessionId).eq("status", "active").maybeSingle(),
   ]);
   return { session, control, player, game };
 }

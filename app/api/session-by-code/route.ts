@@ -25,6 +25,6 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data: control } = await supabase.from("session_controls").select("decision_player_id,state").eq("session_id", session.id).maybeSingle();
+  const { data: control } = await supabase.from("session_controls").select("decision_player_id,state").eq("session_id", session.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
   return NextResponse.json({ session, needsController: !control, isPaused: control?.state === "timeout" });
 }

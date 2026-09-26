@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const { supabase, user } = await requireAnonymousPlayer(request); const { sessionId, action, answer } = await request.json();
     const [{ data: player }, { data: control }, { data: session }, { data: game }] = await Promise.all([
       supabase.from("players").select("id,left_at").eq("session_id", sessionId).eq("auth_user_id", user.id).single(),
-      supabase.from("session_controls").select("*").eq("session_id", sessionId).single(),
+      supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("sessions").select("*").eq("id", sessionId).single(),
       supabase.from("aging_room_games").select("*").eq("session_id", sessionId).in("status", ["active", "setup"]).maybeSingle(),
     ]);

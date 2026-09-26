@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const { supabase, user } = await requireAnonymousPlayer(request); const { sessionId } = await request.json();
     const [{ data: player }, { data: control }, { data: session }] = await Promise.all([
       supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", user.id).single(),
-      supabase.from("session_controls").select("*").eq("session_id", sessionId).single(),
+      supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("sessions").select("*").eq("id", sessionId).single(),
     ]);
     if (!player || !control || !session) return NextResponse.json({ error: "Game not found." }, { status: 404 });
