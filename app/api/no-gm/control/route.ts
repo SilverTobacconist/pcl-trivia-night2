@@ -10,8 +10,8 @@ export async function POST(request: Request) {
     if (!player || !control) return NextResponse.json({ error: "Game player not found." }, { status: 404 });
     if (player.left_at) return NextResponse.json({ error: "You have left this game." }, { status: 403 });
     const isDecisionPlayer = control.decision_player_id === player.id;
-    if (action === "resume" && control.state === "timeout") {
-      if (!isDecisionPlayer) return NextResponse.json({ error: "The player who joined after the pause is now the Decision Player and will resume this game." }, { status: 403 });
+    if (["resume", "take_control_and_resume"].includes(action) && control.state === "timeout") {
+      if (action === "resume" && !isDecisionPlayer) return NextResponse.json({ error: "Take control first, then resume this game." }, { status: 403 });
       const now = new Date();
       const { data: session, error: sessionError } = await supabase.from("sessions").select("question_status,question_duration_seconds").eq("id", sessionId).single();
       if (sessionError || !session) throw sessionError || new Error("Game session not found.");
