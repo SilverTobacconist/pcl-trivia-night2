@@ -22,6 +22,11 @@ export async function POST(request: Request) {
       player.left_at = null;
     }
     let { data: control } = await supabase.from("session_controls").select("*").eq("session_id", session.id).maybeSingle();
+    if (control?.state === "timeout") {
+      const { data: claimedControl, error: claimError } = await supabase.from("session_controls").update({ decision_player_id: player.id, updated_at: new Date().toISOString() }).eq("session_id", session.id).eq("state", "timeout").select("*").single();
+      if (claimError) throw claimError;
+      control = claimedControl;
+    }
     if (!control && !declineController) {
       const created = await supabase.from("session_controls").insert({ session_id: session.id, decision_player_id: player.id, state: "lobby" }).select("*").single();
       if (created.error) throw created.error;

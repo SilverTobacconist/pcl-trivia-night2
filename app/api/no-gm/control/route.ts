@@ -11,7 +11,23 @@ export async function POST(request: Request) {
     if (player.left_at) return NextResponse.json({ error: "You have left this game." }, { status: 403 });
     const isDecisionPlayer = control.decision_player_id === player.id;
     if (action === "resume" && control.state === "timeout") {
-      const { error } = await supabase.rpc("resume_no_gm_session", { p_session_id: sessionId });
+      const now = new Date();
+      const { data: session, error: sessionError } = await supabase.from("sessions").select("question_status,question_duration_seconds").eq("id", sessionId).single();
+      if (sessionError || !session) throw sessionError || new Error("Game session not found.");
+      // Older pauses recorded a literal "timeout" question status.  Those games
+      // cannot restore an in-progress question, but they do retain their active mode.
+      const restoredStatus = session.question_status === "timeout" ? "ready" : session.question_status;
+      const sessionUpdate: Record<string, any> = { question_status: restoredStatus, show_answer: restoredStatus === "revealed" };
+      if (restoredStatus === "active") {
+        const durationSeconds = Number(session.question_duration_seconds || 60);
+        sessionUpdate.question_started_at = now.toISOString();
+        sessionUpdate.question_ends_at = new Date(now.getTime() + durationSeconds * 1000).toISOString();
+      } else if (restoredStatus === "revealed") {
+        sessionUpdate.question_ends_at = now.toISOString();
+      }
+      const { error: restoreError } = await supabase.from("sessions").update(sessionUpdate).eq("id", sessionId);
+      if (restoreError) throw restoreError;
+      const { error } = await supabase.from("session_controls").update({ state: "main_active", decision_player_id: player.id, timeout_at: null, last_activity_at: now.toISOString(), updated_at: now.toISOString() }).eq("session_id", sessionId);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }

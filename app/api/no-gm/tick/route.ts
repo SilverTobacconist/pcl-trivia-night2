@@ -39,7 +39,6 @@ export async function POST(request: Request) {
     const lastActivity = Math.max(...activityTimes);
     if (now.getTime() - lastActivity >= INACTIVITY_MS) {
       await supabase.from("session_controls").update({ state: "timeout", timeout_at: now.toISOString(), updated_at: now.toISOString() }).eq("session_id", sessionId);
-      await supabase.from("sessions").update({ question_status: "timeout", show_answer: false }).eq("id", sessionId);
       return NextResponse.json({ ok: true, timeout: true });
     }
     const { data: openDispute } = await supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").maybeSingle();
@@ -91,22 +90,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (session.question_status !== "ready") return NextResponse.json({ ok: true });
-    const usedIds = await usedQuestionIdsForLocation(supabase, session.location, ["main", "keyword_trivia", "last_call"]);
-    const candidates = (await loadQuestions()).filter((question: any) => question.question_id && question.question_text && !usedIds.has(question.question_id));
-    if (!candidates.length) {
+    const allQuestions = (await loadQuestions()).filter((question: any) => question.question_id && question.question_text);
+    const usedIds = await usedQuestionIdsForLocation(supabase, session.location, ["main", "last_call"]);
+    const candidates = allQuestions.filter((question: any) => !usedIds.has(question.question_id));
+    const questionNumber = Number(control.main_question_count || 0) + 1;
+    const frequency = Number(control.keyword_trivia_frequency || 0);
+    const keyword = String(control.keyword_trivia_term || "").trim().toLowerCase();
+    const shouldFeatureKeyword = session.game_mode === "keyword_trivia" && keyword && frequency > 0 && questionNumber % frequency === 0;
+    const keywordHistoryMode = `keyword:${keyword}`;
+    let pool = candidates;
+    let historyMode = "main";
+    if (shouldFeatureKeyword) {
+      const keywordCandidates = allQuestions.filter((question: any) => `${question.category || ""} ${question.subcategory || ""}`.toLowerCase().includes(keyword));
+      if (keywordCandidates.length) {
+        const { data: askedKeywordQuestions, error: keywordHistoryError } = await supabase.from("question_history").select("id,question_id").eq("session_id", sessionId).eq("game_mode", keywordHistoryMode);
+        if (keywordHistoryError) throw keywordHistoryError;
+        const askedIds = new Set((askedKeywordQuestions || []).map((row: any) => row.question_id));
+        const unaskedKeywordCandidates = keywordCandidates.filter((question: any) => !askedIds.has(question.question_id));
+        if (unaskedKeywordCandidates.length) {
+          pool = unaskedKeywordCandidates;
+        } else {
+          // The whole keyword deck has been used.  Start a freshly shuffled pass.
+          const { error: resetError } = await supabase.from("question_history").delete().eq("session_id", sessionId).eq("game_mode", keywordHistoryMode);
+          if (resetError) throw resetError;
+          pool = keywordCandidates;
+        }
+        historyMode = keywordHistoryMode;
+      }
+    }
+    if (!pool.length) {
       await exportLeaderboard(supabase, sessionId, "completed");
       await supabase.from("session_controls").update({ state: "ended", ended_at: now.toISOString(), exported_at: now.toISOString() }).eq("session_id", sessionId);
       await supabase.from("sessions").update({ status: "ended", game_mode: "complete", question_status: "closed" }).eq("id", sessionId);
       return NextResponse.json({ ok: true, ended: true });
     }
-    const questionNumber = Number(control.main_question_count || 0) + 1;
-    const frequency = Number(control.keyword_trivia_frequency || 0);
-    const keyword = String(control.keyword_trivia_term || "").trim().toLowerCase();
-    const shouldFeatureKeyword = session.game_mode === "keyword_trivia" && keyword && frequency > 0 && questionNumber % frequency === 0;
-    const keywordCandidates = shouldFeatureKeyword ? candidates.filter((question: any) => `${question.category || ""} ${question.subcategory || ""}`.toLowerCase().includes(keyword)) : [];
-    const pool = keywordCandidates.length ? keywordCandidates : candidates;
     const question = pool[Math.floor(Math.random() * pool.length)]; const endsAt = new Date(now.getTime() + QUESTION_SECONDS * 1000);
-    await supabase.from("question_history").insert({ question_id: question.question_id, session_id: sessionId, game_mode: session.game_mode === "keyword_trivia" ? "keyword_trivia" : "main", date_used: now.toISOString(), question_text: question.question_text, category: question.category, subcategory: question.subcategory, difficulty: question.difficulty, correct_answer: question.answer });
+    await supabase.from("question_history").insert({ question_id: question.question_id, session_id: sessionId, game_mode: historyMode, date_used: now.toISOString(), question_text: question.question_text, category: question.category, subcategory: question.subcategory, difficulty: question.difficulty, correct_answer: question.answer });
     await supabase.from("sessions").update({ current_question_id: question.question_id, current_question_text: question.question_text, current_category: question.category, current_subcategory: question.subcategory, current_difficulty: question.difficulty, current_answer: question.answer, current_answer_aliases: question.answer_aliases, question_started_at: now.toISOString(), question_ends_at: endsAt.toISOString(), question_duration_seconds: QUESTION_SECONDS, question_status: "active", show_answer: false }).eq("id", sessionId);
     await supabase.from("session_controls").update({ main_question_count: Number(control.main_question_count || 0) + 1, updated_at: now.toISOString() }).eq("session_id", sessionId);
     return NextResponse.json({ ok: true, questionStarted: true });
