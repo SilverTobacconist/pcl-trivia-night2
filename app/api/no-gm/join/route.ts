@@ -23,9 +23,12 @@ export async function POST(request: Request) {
     }
     let { data: control } = await supabase.from("session_controls").select("*").eq("session_id", session.id).maybeSingle();
     if (control?.state === "timeout") {
-      const { data: claimedControl, error: claimError } = await supabase.from("session_controls").update({ decision_player_id: player.id, updated_at: new Date().toISOString() }).eq("session_id", session.id).eq("state", "timeout").select("*").single();
+      // Do not read this update back with .single(): an old session can contain
+      // duplicate control rows, and PostgREST then refuses to coerce the result
+      // to one JSON object even though the player was successfully created.
+      const { error: claimError } = await supabase.from("session_controls").update({ decision_player_id: player.id, updated_at: new Date().toISOString() }).eq("id", control.id).eq("state", "timeout");
       if (claimError) throw claimError;
-      control = claimedControl;
+      control = { ...control, decision_player_id: player.id };
     }
     if (!control && !declineController) {
       const created = await supabase.from("session_controls").insert({ session_id: session.id, decision_player_id: player.id, state: "lobby" }).select("*").single();
