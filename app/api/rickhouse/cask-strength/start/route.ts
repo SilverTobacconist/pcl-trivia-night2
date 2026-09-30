@@ -36,7 +36,13 @@ export async function POST(request: Request) {
     if (!scores?.length) return NextResponse.json({ error: "No players have a positive score, so nobody qualifies." }, { status: 400 });
 
     const { data: event } = game.trivia_tuesday_event_id ? await supabase.from("trivia_tuesday_events").select("question_sheet_name").eq("id", game.trivia_tuesday_event_id).single() : { data: null };
-    const rows = await loadTriviaTuesdayRows(event ? event.question_sheet_name : "Questions");
+    let rows: any[];
+    if (event) rows = await loadTriviaTuesdayRows(event.question_sheet_name);
+    else {
+      const response = await fetch(QUESTIONS_CSV_URL, { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load questions from Google Sheets.");
+      rows = parseCsv(await response.text());
+    }
     const validRows = rows.filter((q: any) => q.active?.toLowerCase() !== "false" && q.question_id && q.question_text && q.answer);
     if (event) {
       const question = validRows.find((q: any) => q.round_name === "cask_strength");
