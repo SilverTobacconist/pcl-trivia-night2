@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
 async function endSession(sessionId: string) {
+  const { data: session } = await supabase.from("sessions").select("is_test").eq("id", sessionId).single();
+  if (session?.is_test) {
+    await supabase.from("session_controls").update({ state: "ended", ended_at: new Date().toISOString() }).eq("session_id", sessionId);
+    await supabase.from("sessions").update({ status: "ended", game_mode: "complete", question_status: "closed" }).eq("id", sessionId);
+    return;
+  }
   const { data: leaderboard } = await supabase.from("players").select("id,display_name,score").eq("session_id", sessionId).order("score", { ascending: false });
   await supabase.from("session_leaderboard_exports").upsert({ session_id: sessionId, reason: "bartender_ended", leaderboard: leaderboard || [] }, { onConflict: "session_id" });
   await supabase.from("session_controls").update({ state: "ended", ended_at: new Date().toISOString(), exported_at: new Date().toISOString() }).eq("session_id", sessionId);
