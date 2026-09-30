@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { recordGameResult } from "@/lib/gameResults";
 
 function placementPoints(place: number) {
@@ -12,6 +12,7 @@ function placementPoints(place: number) {
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseAdmin();
     const { gameId } = await request.json();
 
     if (!gameId) {
@@ -132,12 +133,17 @@ export async function POST(request: Request) {
     })).sort((a, b) => b.game_score - a.game_score);
     const allPlayerIds = rankedScores.map((entry) => entry.player_id);
     const { data: names } = await supabase.from("players").select("id,display_name").in("id", allPlayerIds.length ? allPlayerIds : ["00000000-0000-0000-0000-000000000000"]);
-    await recordGameResult(game.session_id, game.id, "rickhouse", rankedScores.map((entry, entryIndex, all) => ({
+    const placements = rankedScores.map((entry, entryIndex, all) => ({
       player_id: entry.player_id,
       player_name: names?.find((player) => player.id === entry.player_id)?.display_name || "Unknown",
       place: all.findIndex((candidate) => candidate.game_score === entry.game_score) + 1,
       game_score: entry.game_score,
-    })));
+    }));
+    if (!game.is_test) await recordGameResult(game.session_id, game.id, "rickhouse", placements);
+    if (game.trivia_tuesday_event_id && !game.is_test) {
+      await supabase.from("trivia_tuesday_results").upsert({ event_id: game.trivia_tuesday_event_id, session_id: game.session_id, game_id: game.id, placements });
+      await supabase.from("trivia_tuesday_events").update({ status: "completed", completed_game_id: game.id }).eq("id", game.trivia_tuesday_event_id);
+    }
 
     const { error: gameUpdateError } = await supabase
       .from("rickhouse_games")
