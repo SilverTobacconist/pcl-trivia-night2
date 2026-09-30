@@ -14,3 +14,5 @@ with (security_invoker = false) as
   join public.trivia_tuesday_events e on e.id = r.event_id
   where e.status = 'completed';
 grant select on public.trivia_tuesday_leaderboard to anon, authenticated;
+
+alter table public.sessions add column if not exists trivia_tuesday_theme text;
