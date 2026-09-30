@@ -107,3 +107,9 @@ button.button-clicked:not(:disabled) {
  .rickhouse-column strong { min-height:3.5rem; display:grid; place-items:center; color:#f3c75f; }
  .rickhouse-column button { min-height:3.25rem; }
  .rickhouse-used { opacity:.45; }
+ .trivia-theme-autumn { background: radial-gradient(circle at top, #7d341c, #20130d 62%); }
+ .trivia-theme-autumn h1 { color: #f0a24a; }
+ .trivia-theme-halloween { background: radial-gradient(circle at top, #45185d, #09040c 64%); }
+ .trivia-theme-halloween h1, .trivia-theme-halloween .event-answer { color: #ff7a1a; }
+ .trivia-theme-holiday { background: radial-gradient(circle at top, #0d5a38, #07150e 62%); }
+ .trivia-theme-holiday h1 { color: #e8ca78; }
