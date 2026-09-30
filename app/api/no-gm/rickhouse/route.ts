@@ -6,6 +6,7 @@ import { POST as submitWager } from "@/app/api/rickhouse/submit-wager/route";
 import { POST as submitAnswer } from "@/app/api/rickhouse/submit-answer/route";
 import { POST as submitCaskWager } from "@/app/api/rickhouse/cask-strength/submit-wager/route";
 import { POST as submitCaskAnswer } from "@/app/api/rickhouse/cask-strength/submit-answer/route";
+import { POST as closeRickhouse } from "@/app/api/rickhouse/close/route";
 
 function forwarded(body: any) { return new Request("http://internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
 
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
       return response;
     }
     if (!game) return NextResponse.json({ error: "Rickhouse is not active." }, { status: 404 });
+    if (action === "return_to_main") {
+      if (control.decision_player_id !== player.id) return NextResponse.json({ error: "Only the Decision Player can return to ordinary trivia." }, { status: 403 });
+      if (game.game_phase !== "cask_strength_complete") return NextResponse.json({ error: "Rickhouse must be complete before returning to ordinary trivia." }, { status: 409 });
+      return closeRickhouse(forwarded({ gameId: game.id }));
+    }
     if (action === "pick") {
       if (game.current_picker_player_id !== player.id) return NextResponse.json({ error: "It is not your pick." }, { status: 403 });
       return selectPour(forwarded({ gameId: game.id, pourId: value, playerId: player.id }));
