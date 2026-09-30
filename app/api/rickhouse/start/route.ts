@@ -48,7 +48,9 @@ function parseCsv(csv: string) {
 }
 
 async function getQuestions() {
-  return loadTriviaTuesdayRows("Questions");
+  const response = await fetch(QUESTIONS_CSV_URL, { cache: "no-store" });
+  if (!response.ok) throw new Error("Could not load questions from Google Sheets.");
+  return parseCsv(await response.text()).filter((question) => question.active?.toLowerCase() !== "false");
 }
 
 function shuffle<T>(items: T[]) {
