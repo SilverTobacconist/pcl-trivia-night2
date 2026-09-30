@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
+import { loadTriviaTuesdayRows } from "@/lib/googleSheets";
 
 const QUESTIONS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpLt8hHXfb9tNryhHh6w7Z7GZ-evzFcpZZ512sdYNKKW_dnQ-LDgwI9jGLhJAOPQ/pub?gid=802549699&single=true&output=csv";
 
@@ -33,14 +34,25 @@ export async function POST(request: Request) {
     if (scoreError) return NextResponse.json({ error: scoreError.message }, { status: 500 });
     if (!scores?.length) return NextResponse.json({ error: "No players have a positive score, so nobody qualifies." }, { status: 400 });
 
-    const response = await fetch(QUESTIONS_CSV_URL, { cache: "no-store" });
-    if (!response.ok) throw new Error("Could not load questions from Google Sheets.");
-    const rows = parseCsv(await response.text()).filter((q) => q.active?.toLowerCase() !== "false" && q.question_id && q.question_text && q.answer);
-    const preferred = rows.filter((q) => ["Hard", "Extra Hard"].includes(q.difficulty));
-    const pool = preferred.length ? preferred : rows;
+    const { data: event } = game.trivia_tuesday_event_id ? await supabase.from("trivia_tuesday_events").select("question_sheet_name").eq("id", game.trivia_tuesday_event_id).single() : { data: null };
+    const rows = await loadTriviaTuesdayRows(event ? event.question_sheet_name : "Questions");
+    const validRows = rows.filter((q: any) => q.active?.toLowerCase() !== "false" && q.question_id && q.question_text && q.answer);
+    if (event) {
+      const question = validRows.find((q: any) => q.round_name === "cask_strength");
+      if (!question) return NextResponse.json({ error: "The Trivia Tuesday Final question needs a question and answer." }, { status: 400 });
+      return beginCask(game, scores, question);
+    }
+    const preferred = validRows.filter((q) => ["Hard", "Extra Hard"].includes(q.difficulty));
+    const pool = preferred.length ? preferred : validRows;
     const question = pool[Math.floor(Math.random() * pool.length)];
     if (!question) return NextResponse.json({ error: "No eligible Cask Strength question was found." }, { status: 400 });
 
+    return beginCask(game, scores, question);
+  } catch (error: any) { return NextResponse.json({ error: error.message || "Unknown error." }, { status: 500 }); }
+}
+
+async function beginCask(game: any, scores: any[], question: any) {
+    const gameId = game.id;
     await supabase.from("rickhouse_cask_strength_entries").delete().eq("game_id", gameId);
     const entries = scores.map((score, index) => ({
       game_id: gameId, session_id: game.session_id, player_id: score.player_id,
@@ -67,5 +79,4 @@ export async function POST(request: Request) {
 
     await supabase.from("sessions").update({ question_status: "cask_strength_wager", game_mode: "rickhouse", current_question_text: null, current_subcategory: question.subcategory || question.category || "General", question_started_at: startedAt.toISOString(), question_ends_at: endsAt.toISOString(), question_duration_seconds: 30, show_answer: false }).eq("id", game.session_id);
     return NextResponse.json({ success: true });
-  } catch (error: any) { return NextResponse.json({ error: error.message || "Unknown error." }, { status: 500 }); }
 }
