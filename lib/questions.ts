@@ -1,4 +1,5 @@
-import { loadTriviaTuesdayRows } from "@/lib/googleSheets";
+export const QUESTIONS_CSV_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpLt8hHXfb9tNryhHh6w7Z7GZ-evzFcpZZ512sdYNKKW_dnQ-LDgwI9jGLhJAOPQ/pub?gid=802549699&single=true&output=csv";
 
 function parseCsvLine(line: string) {
   const result: string[] = [];
@@ -20,7 +21,14 @@ function parseCsvLine(line: string) {
 }
 
 export async function loadQuestions() {
-  return loadTriviaTuesdayRows("Questions");
+  const response = await fetch(QUESTIONS_CSV_URL, { cache: "no-store" });
+  if (!response.ok) throw new Error("Could not load questions from Google Sheets.");
+  const lines = (await response.text()).trim().split(/\r?\n/);
+  const headers = parseCsvLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+  }).filter((question: any) => question.active?.toLowerCase() !== "false");
 }
 
 export function normalizeAnswer(value: string) {
