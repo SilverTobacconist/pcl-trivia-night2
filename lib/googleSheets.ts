@@ -34,7 +34,7 @@ export async function createTriviaTuesdaySheet(title: string, eventCode: string)
   for (const round of [["single_cask","S1"],["double_cask","S2"]] as const) for (let column=1; column<=5; column++) for (let row=1; row<=5; row++) add(round[0],column,row,round[1]);
   rows.push([`TT-${eventCode}-FINAL`,"","","Extra Hard","","","","typed","","","","","","none","","rickhouse","FALSE","FALSE","TRUE","","cask_strength","",""]);
   const result = await request(":batchUpdate", { method:"POST", body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title } } }] }) });
-  await request(`/values/${encodeURIComponent(title)}!A1:W51?valueInputOption=RAW`, { method:"PUT", body: JSON.stringify({ majorDimension:"ROWS", values:rows }) });
+  await request(`/values/${encodeURIComponent(title)}!A1:W52?valueInputOption=RAW`, { method:"PUT", body: JSON.stringify({ majorDimension:"ROWS", values:rows }) });
   return result.replies[0].addSheet.properties;
 }
 
