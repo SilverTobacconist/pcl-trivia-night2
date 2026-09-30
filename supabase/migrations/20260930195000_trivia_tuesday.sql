@@ -13,6 +13,7 @@ create table if not exists public.trivia_tuesday_events (
 
 alter table public.sessions add column if not exists trivia_tuesday_event_id uuid references public.trivia_tuesday_events(id);
 alter table public.sessions add column if not exists is_test boolean not null default false;
+alter table public.sessions add column if not exists trivia_tuesday_theme text;
 alter table public.rickhouse_games add column if not exists trivia_tuesday_event_id uuid references public.trivia_tuesday_events(id);
 alter table public.rickhouse_games add column if not exists is_test boolean not null default false;
 
