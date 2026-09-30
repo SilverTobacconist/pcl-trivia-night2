@@ -41,18 +41,18 @@ export async function POST(request: Request) {
     if (event) {
       const question = validRows.find((q: any) => q.round_name === "cask_strength");
       if (!question) return NextResponse.json({ error: "The Trivia Tuesday Final question needs a question and answer." }, { status: 400 });
-      return beginCask(game, scores, question);
+      return beginCask(supabase, game, scores, question);
     }
     const preferred = validRows.filter((q) => ["Hard", "Extra Hard"].includes(q.difficulty));
     const pool = preferred.length ? preferred : validRows;
     const question = pool[Math.floor(Math.random() * pool.length)];
     if (!question) return NextResponse.json({ error: "No eligible Cask Strength question was found." }, { status: 400 });
 
-    return beginCask(game, scores, question);
+    return beginCask(supabase, game, scores, question);
   } catch (error: any) { return NextResponse.json({ error: error.message || "Unknown error." }, { status: 500 }); }
 }
 
-async function beginCask(game: any, scores: any[], question: any) {
+async function beginCask(supabase: any, game: any, scores: any[], question: any) {
     const gameId = game.id;
     await supabase.from("rickhouse_cask_strength_entries").delete().eq("game_id", gameId);
     const entries = scores.map((score, index) => ({
