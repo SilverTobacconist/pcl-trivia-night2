@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         if (event.status === "completed") return NextResponse.json({ error:"This Trivia Tuesday has already been played." }, { status:409 });
         if (Date.now() < new Date(event.scheduled_start_at).getTime() - 2 * 60 * 60 * 1000) return NextResponse.json({ error:"Trivia Tuesday opens two hours before its scheduled start." }, { status:409 });
       }
-      const { data:session,error:sessionError } = await supabase.from("sessions").insert({ session_code:sessionCode(), location:event.location, host_name:isTest ? "Trivia Tuesday Test" : "Bartender", created_at:new Date().toISOString(), game_mode:"main", status:"active", trivia_tuesday_event_id:event.id, is_test:isTest, question_status:"lobby" }).select("*").single();
+      const { data:session,error:sessionError } = await supabase.from("sessions").insert({ session_code:sessionCode(), location:event.location, host_name:isTest ? "Trivia Tuesday Test" : "Bartender", created_at:new Date().toISOString(), game_mode:"main", status:"active", trivia_tuesday_event_id:event.id, trivia_tuesday_theme:event.board_theme, is_test:isTest, question_status:"lobby" }).select("*").single();
       if (sessionError) return NextResponse.json({ error:sessionError.message }, { status:500 });
       if (!isTest) await supabase.from("trivia_tuesday_events").update({ status:"lobby", started_session_id:session.id }).eq("id",event.id);
       return NextResponse.json({ session, event });
