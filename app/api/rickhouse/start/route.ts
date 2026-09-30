@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
+import { loadTriviaTuesdayRows } from "@/lib/googleSheets";
 
 const QUESTIONS_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpLt8hHXfb9tNryhHh6w7Z7GZ-evzFcpZZ512sdYNKKW_dnQ-LDgwI9jGLhJAOPQ/pub?gid=802549699&single=true&output=csv";
@@ -47,19 +48,7 @@ function parseCsv(csv: string) {
 }
 
 async function getQuestions() {
-  const response = await fetch(QUESTIONS_CSV_URL, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Could not load questions from Google Sheets.");
-  }
-
-  const csv = await response.text();
-
-  return parseCsv(csv).filter(
-    (question) => question.active?.toLowerCase() !== "false"
-  );
+  return loadTriviaTuesdayRows("Questions");
 }
 
 function shuffle<T>(items: T[]) {
@@ -173,6 +162,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const activeTriviaTuesdayEventId = body.triviaTuesdayEventId || session.trivia_tuesday_event_id || null;
+    const { data: triviaTuesdayEvent } = activeTriviaTuesdayEventId
+      ? await supabase.from("trivia_tuesday_events").select("*").eq("id", activeTriviaTuesdayEventId).single()
+      : { data: null };
+
     const { data: players, error: playersError } = await supabase
       .from("players")
       .select("id, display_name")
@@ -245,7 +239,8 @@ export async function POST(request: Request) {
       ? requestedPickerPlayerId
       : players[Math.floor(Math.random() * players.length)].id;
 
-    const questions = await getQuestions();
+    const seasonalRows = triviaTuesdayEvent ? await loadTriviaTuesdayRows(triviaTuesdayEvent.question_sheet_name) : null;
+    const questions = seasonalRows || await getQuestions();
 
     const eligibleQuestions = questions.filter((question: any) => {
       if (!question.question_id || !question.question_text) {
@@ -284,7 +279,7 @@ export async function POST(request: Request) {
         questions: groupedQuestions,
       }));
 
-    if (usableCategories.length < 5) {
+    if (!seasonalRows && usableCategories.length < 5) {
       return NextResponse.json(
         {
           error:
@@ -294,7 +289,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const selectedCategories = shuffle(usableCategories).slice(0, 5);
+    const selectedCategories = seasonalRows ? [] : shuffle(usableCategories).slice(0, 5);
+    const seasonalPours = seasonalRows
+      ? seasonalRows.filter((row: any) => row.round_name === roundName && row.question_text && row.answer)
+      : [];
+    if (seasonalRows && seasonalPours.length !== 25) return NextResponse.json({ error: `The ${roundName === "single_cask" ? "Round 1" : "Round 2"} board needs all 25 question and answer fields completed.` }, { status: 400 });
 
     const roundStartedAt = new Date();
     const roundDurationSeconds = 15 * 60;
@@ -316,6 +315,8 @@ export async function POST(request: Request) {
         round_duration_seconds: roundDurationSeconds,
         round_complete_reason: null,
         proposed_next_picker_player_id: null,
+        trivia_tuesday_event_id: activeTriviaTuesdayEventId,
+        is_test: Boolean(session.is_test),
       })
       .select("*")
       .single();
@@ -343,7 +344,13 @@ export async function POST(request: Request) {
     const pours: any[] = [];
     const selectedQuestionIds = new Set<string>();
 
-    for (
+    if (seasonalRows) {
+      for (const question of seasonalPours) {
+        const columnIndex = Number(question.board_column) - 1; const rowIndex = Number(question.board_row) - 1;
+        if (columnIndex < 0 || columnIndex > 4 || rowIndex < 0 || rowIndex > 4) return NextResponse.json({ error: `Invalid board position on ${question.question_id}.` }, { status: 400 });
+        pours.push({ game_id: game.id, session_id: sessionId, round_name: roundName, category: question.category || question.subcategory || `Category ${columnIndex + 1}`, subcategory: question.subcategory || "", column_index: columnIndex, row_index: rowIndex, point_value: pointValueForRow(roundName, rowIndex), question_id: question.question_id, question_text: question.question_text, correct_answer: question.answer, answer_aliases: question.answer_aliases || "", difficulty: question.difficulty || difficultyForRow(roundName,rowIndex), is_angels_share: angelPositions.has(`${columnIndex}-${rowIndex}`), is_used:false, is_graded:false });
+      }
+    } else for (
       let columnIndex = 0;
       columnIndex < selectedCategories.length;
       columnIndex++
