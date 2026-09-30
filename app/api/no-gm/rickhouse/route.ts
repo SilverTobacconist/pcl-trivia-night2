@@ -13,15 +13,16 @@ export async function POST(request: Request) {
   try {
     const { supabase, user } = await requireAnonymousPlayer(request);
     const { sessionId, action, value } = await request.json();
-    const [{ data: player }, { data: control }, { data: game }] = await Promise.all([
+    const [{ data: player }, { data: control }, { data: game }, { data: session }] = await Promise.all([
       supabase.from("players").select("id,left_at").eq("session_id", sessionId).eq("auth_user_id", user.id).single(),
       supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("rickhouse_games").select("*").eq("session_id", sessionId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("sessions").select("trivia_tuesday_event_id").eq("id", sessionId).single(),
     ]);
     if (!player || player.left_at || !control) return NextResponse.json({ error: "Game player not found." }, { status: 404 });
     if (action === "start") {
       if (control.decision_player_id !== player.id) return NextResponse.json({ error: "Only the Decision Player starts a mode." }, { status: 403 });
-      const response = await startRickhouse(forwarded({ sessionId, roundName: "single_cask", pickerPlayerId: player.id }));
+      const response = await startRickhouse(forwarded({ sessionId, roundName: "single_cask", pickerPlayerId: player.id, triviaTuesdayEventId: session?.trivia_tuesday_event_id || null }));
       if (response.ok) await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
       return response;
     }
