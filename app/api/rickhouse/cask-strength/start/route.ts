@@ -20,6 +20,28 @@ function parseCsv(csv: string) {
   return lines.slice(1).map((line) => { const values = parseCsvLine(line); const row: Record<string,string> = {}; headers.forEach((h,i)=>row[h]=values[i]??""); return row; });
 }
 
+function seasonalFinalQuestions(rows: any[]) {
+  let finalBlock = false;
+  let fallbackNumber = 0;
+  const questions: any[] = [];
+  for (const row of rows) {
+    if (row.round_name === "cask_strength") finalBlock = true;
+    else if (finalBlock && row.round_name) finalBlock = false;
+    if (!finalBlock || !row.question_text || !row.answer) continue;
+    fallbackNumber += 1;
+    const difficulty = String(row.difficulty || "").trim() || "Extra Hard";
+    questions.push({
+      ...row,
+      difficulty,
+      // Older tabs may have the three follow-on final rows without IDs.  They
+      // are still a contiguous Cask Strength block, so keep them playable.
+      question_id: row.question_id || `seasonal-final-${difficulty.toLowerCase().replace(/\s+/g,"-")}-${fallbackNumber}`,
+      round_name: "cask_strength",
+    });
+  }
+  return questions;
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = getSupabaseAdmin();
@@ -43,12 +65,13 @@ export async function POST(request: Request) {
       if (!response.ok) throw new Error("Could not load questions from Google Sheets.");
       rows = parseCsv(await response.text());
     }
-    const validRows = rows.filter((q: any) => q.active?.toLowerCase() !== "false" && q.question_id && q.question_text && q.answer);
     if (event) {
-      const question = validRows.find((q: any) => q.round_name === "cask_strength");
-      if (!question) return NextResponse.json({ error: "The Trivia Tuesday Final question needs a question and answer." }, { status: 400 });
+      const finals = seasonalFinalQuestions(rows);
+      const question = finals[Math.floor(Math.random() * finals.length)];
+      if (!question) return NextResponse.json({ error: "Trivia Tuesday needs at least one completed Cask Strength Final question." }, { status: 400 });
       return beginCask(supabase, game, scores, question);
     }
+    const validRows = rows.filter((q: any) => q.active?.toLowerCase() !== "false" && q.question_id && q.question_text && q.answer);
     const preferred = validRows.filter((q) => ["Hard", "Extra Hard"].includes(q.difficulty));
     const pool = preferred.length ? preferred : validRows;
     const question = pool[Math.floor(Math.random() * pool.length)];

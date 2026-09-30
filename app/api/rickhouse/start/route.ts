@@ -69,17 +69,26 @@ function shuffle<T>(items: T[]) {
 }
 
 function difficultyForRow(roundName: string, rowIndex: number) {
-  if (roundName === "double_cask") {
-    if (rowIndex === 0) return "Easy";
-    if (rowIndex <= 2) return "Medium";
-    if (rowIndex === 3) return "Hard";
+  const points = pointValueForRow(roundName, rowIndex);
+  if (points <= 600) return "Easy";
+  if (points <= 1200) return "Medium";
+  if (points <= 1800) return "Hard";
+  return "Extra Hard";
+}
+
+function displayDifficulty(value: string, roundName: string, rowIndex: number) {
+  const label = String(value || "").trim();
+  if (["Easy", "Medium", "Hard", "Extra Hard"].includes(label)) return label;
+  // Older event tabs used the board's point value in this column.  Continue
+  // reading them correctly while new tabs use the human-friendly label.
+  const points = Number(label);
+  if (Number.isFinite(points) && points > 0) {
+    if (points <= 600) return "Easy";
+    if (points <= 1200) return "Medium";
+    if (points <= 1800) return "Hard";
     return "Extra Hard";
   }
-
-  if (rowIndex <= 1) return "Easy";
-  if (rowIndex <= 3) return "Medium";
-
-  return "Hard";
+  return difficultyForRow(roundName, rowIndex);
 }
 
 function pointValueForRow(roundName: string, rowIndex: number) {
@@ -351,7 +360,7 @@ export async function POST(request: Request) {
       for (const question of seasonalPours) {
         const columnIndex = Number(question.board_column) - 1; const rowIndex = Number(question.board_row) - 1;
         if (columnIndex < 0 || columnIndex > 4 || rowIndex < 0 || rowIndex > 4) return NextResponse.json({ error: `Invalid board position on ${question.question_id}.` }, { status: 400 });
-        pours.push({ game_id: game.id, session_id: sessionId, round_name: roundName, category: question.category || question.subcategory || `Category ${columnIndex + 1}`, subcategory: question.subcategory || "", column_index: columnIndex, row_index: rowIndex, point_value: pointValueForRow(roundName, rowIndex), question_id: question.question_id, question_text: question.question_text, correct_answer: question.answer, answer_aliases: question.answer_aliases || "", difficulty: question.difficulty || difficultyForRow(roundName,rowIndex), is_angels_share: angelPositions.has(`${columnIndex}-${rowIndex}`), is_used:false, is_graded:false });
+        pours.push({ game_id: game.id, session_id: sessionId, round_name: roundName, category: question.category || question.subcategory || `Category ${columnIndex + 1}`, subcategory: question.subcategory || "", column_index: columnIndex, row_index: rowIndex, point_value: pointValueForRow(roundName, rowIndex), question_id: question.question_id, question_text: question.question_text, correct_answer: question.answer, answer_aliases: question.answer_aliases || "", difficulty: displayDifficulty(question.difficulty,roundName,rowIndex), is_angels_share: angelPositions.has(`${columnIndex}-${rowIndex}`), is_used:false, is_graded:false });
       }
     } else for (
       let columnIndex = 0;

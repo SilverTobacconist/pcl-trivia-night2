@@ -30,16 +30,26 @@ export const TRIVIA_TUESDAY_HEADERS = ["question_id","category","subcategory","d
 
 export async function createTriviaTuesdaySheet(title: string, eventCode: string) {
   const rows: string[][] = [TRIVIA_TUESDAY_HEADERS];
-  const add = (round: string, column: number, row: number, suffix: string) => rows.push([`TT-${eventCode}-${suffix}-C${String(column).padStart(2,"0")}-P${String(row).padStart(2,"0")}`,"","","","","","","typed","","","","","","none","","rickhouse","FALSE","FALSE","TRUE","",round,String(column),String(row)]);
+  const difficultyFor = (round: string, row: number) => {
+    const points = (round === "single_cask" ? 200 : 400) * row;
+    if (points <= 600) return "Easy";
+    if (points <= 1200) return "Medium";
+    if (points <= 1800) return "Hard";
+    return "Extra Hard";
+  };
+  const add = (round: string, column: number, row: number, suffix: string) => rows.push([`TT-${eventCode}-${suffix}-C${String(column).padStart(2,"0")}-P${String(row).padStart(2,"0")}`,"","",difficultyFor(round,row),"","","","typed","","","","","","none","","rickhouse","FALSE","FALSE","TRUE","",round,String(column),String(row)]);
   for (const round of [["single_cask","S1"],["double_cask","S2"]] as const) for (let column=1; column<=5; column++) for (let row=1; row<=5; row++) add(round[0],column,row,round[1]);
-  rows.push([`TT-${eventCode}-FINAL`,"","","Extra Hard","","","","typed","","","","","","none","","rickhouse","FALSE","FALSE","TRUE","","cask_strength","",""]);
+  for (const difficulty of ["Easy","Medium","Hard","Extra Hard"]) {
+    const suffix = difficulty.toUpperCase().replace(/\s+/g,"-");
+    rows.push([`TT-${eventCode}-FINAL-${suffix}`,"","",difficulty,"","","","typed","","","","","","none","","rickhouse","FALSE","FALSE","TRUE","","cask_strength","",""]);
+  }
   const result = await request(":batchUpdate", { method:"POST", body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title } } }] }) });
-  await request(`/values/${encodeURIComponent(title)}!A1:W52?valueInputOption=RAW`, { method:"PUT", body: JSON.stringify({ majorDimension:"ROWS", values:rows }) });
+  await request(`/values/${encodeURIComponent(title)}!A1:W55?valueInputOption=RAW`, { method:"PUT", body: JSON.stringify({ majorDimension:"ROWS", values:rows }) });
   return result.replies[0].addSheet.properties;
 }
 
 export async function loadTriviaTuesdayRows(tabName: string) {
   const data = await request(`/values/${encodeURIComponent(tabName)}!A1:W2000`); const values: string[][] = data.values || []; const [headers,...rows] = values;
   if (!headers) throw new Error("The Trivia Tuesday sheet is empty.");
-  return rows.map((row) => Object.fromEntries(headers.map((header,index)=>[header,row[index] || ""]))).filter((row:any)=>row.question_id && row.active?.toLowerCase() !== "false");
+  return rows.map((row) => Object.fromEntries(headers.map((header,index)=>[header,row[index] || ""]))).filter((row:any)=>row.active?.toLowerCase() !== "false");
 }
