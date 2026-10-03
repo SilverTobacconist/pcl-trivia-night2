@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     supabase.from("sessions").select("*").eq("id", sessionId).single(),
     supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("players").select("id,display_name,score,left_at").eq("session_id", sessionId).order("score", { ascending: false }).order("display_name"),
-    supabase.from("answer_disputes").select("id,answer_id,closes_at").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle(),
+    supabase.from("answer_disputes").select("id,answer_id,closes_at,question_text,correct_answer,submitted_answer").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle(),
     supabase.from("session_leaderboard_exports").select("*").eq("session_id", sessionId).maybeSingle(),
     authData.user ? supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", authData.user.id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
@@ -25,9 +25,9 @@ export async function GET(request: Request) {
   const dispute = disputes ? {
     id: disputes.id,
     closes_at: disputes.closes_at,
-    questionText: session?.current_question_text || "",
-    correctAnswer: session?.current_answer || "",
-    submittedAnswer: disputedAnswer?.submitted_answer || "",
+    questionText: disputes.question_text || session?.current_question_text || "",
+    correctAnswer: disputes.correct_answer || session?.current_answer || "",
+    submittedAnswer: disputes.submitted_answer || disputedAnswer?.submitted_answer || "",
   } : null;
   const { data: lastCallGame } = session?.game_mode === "last_call"
     ? await supabase.from("last_call_games").select("*").eq("session_id", sessionId).is("completed_at", null).maybeSingle()

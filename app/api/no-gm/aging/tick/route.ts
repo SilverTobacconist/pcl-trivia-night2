@@ -31,6 +31,15 @@ export async function POST(request: Request) {
     if (!data.session || !data.control || !data.player || !data.game) return NextResponse.json({ ok: true });
     if (data.control.state !== "main_active") return NextResponse.json({ ok: true });
     const { session, game } = data; const now = new Date(); const elapsed = now.getTime() - new Date(game.phase_started_at || game.updated_at).getTime();
+    const { data: dispute }=await supabase.from("answer_disputes").select("*").eq("session_id",sessionId).eq("status","open").eq("source_type","aging_room").order("opened_at",{ascending:true}).limit(1).maybeSingle();
+    if(dispute){
+      if(now.getTime()<new Date(dispute.closes_at).getTime()) return NextResponse.json({ok:true,disputeOpen:true});
+      const [{data:votes},{data:controlVote}]=await Promise.all([supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id",dispute.id),supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id",dispute.id).eq("player_id",data.control.decision_player_id).maybeSingle()]);
+      const yes=(votes||[]).filter((v:any)=>v.vote_yes).length,no=(votes||[]).length-yes,approved=yes>no||(yes===no&&controlVote?.vote_yes===true);
+      const {data:claimed}=await supabase.from("answer_disputes").update({status:approved?"approved":"rejected",resolved_at:now.toISOString()}).eq("id",dispute.id).eq("status","open").select("id").maybeSingle();
+      if(claimed&&approved){const {data:answer}=await supabase.from("aging_room_answers").select("player_id,is_correct").eq("id",dispute.source_id).single(); if(answer&&!answer.is_correct){await supabase.from("aging_room_answers").update({is_correct:true}).eq("id",dispute.source_id);const {data:row}=await supabase.from("aging_room_players").select("id,round_correct,bale_count").eq("game_id",game.id).eq("player_id",answer.player_id).maybeSingle();if(row) await supabase.from("aging_room_players").update(game.phase==="bale_result"?{bale_count:Number(row.bale_count||0)+1}:{round_correct:Number(row.round_correct||0)+1}).eq("id",row.id);}}
+      return NextResponse.json({ok:true,disputeResolved:true});
+    }
     if (data.control.pending_action && ["question_result", "bale_result", "elimination"].includes(game.phase)) {
       await supabase.from("aging_room_games").update({ status: "closed", phase: "ended_early", updated_at: now.toISOString() }).eq("id", game.id);
       if (data.control.pending_action === "end_mode") {
