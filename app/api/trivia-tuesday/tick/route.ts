@@ -9,6 +9,8 @@ export async function POST(request: Request) {
     const { supabase, user } = await requireAnonymousPlayer(request); const { sessionId } = await request.json();
     const [{ data:session },{ data:player }] = await Promise.all([supabase.from("sessions").select("*").eq("id",sessionId).single(),supabase.from("players").select("id").eq("session_id",sessionId).eq("auth_user_id",user.id).maybeSingle()]);
     if (!session?.trivia_tuesday_event_id || !player) return NextResponse.json({ ok:true });
+    // Every Trivia Tuesday game is manually started by its first player.
+    return NextResponse.json({ ok:true });
     const admin = getSupabaseAdmin(); const { data:event } = await admin.from("trivia_tuesday_events").select("*").eq("id",session.trivia_tuesday_event_id).single();
     if (!event) return NextResponse.json({ ok:true });
     if (event.status === "completed" && !session.is_test) return NextResponse.json({ ok:true });

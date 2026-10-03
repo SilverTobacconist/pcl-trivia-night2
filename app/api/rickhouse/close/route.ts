@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { data: game } = await supabase.from("rickhouse_games").select("*").eq("id", gameId).single();
     if (!game) return NextResponse.json({ error: "Rickhouse game not found." }, { status: 404 });
 
-    const completedNormally = game.game_phase === "cask_strength_complete";
+    const completedNormally = ["cask_strength_complete","cask_strength_session_leaderboard"].includes(game.game_phase);
     if (!completedNormally && !early) {
       return NextResponse.json({ error: "Rickhouse Trivia is not ready to close." }, { status: 409 });
     }
@@ -68,26 +68,11 @@ export async function POST(request: Request) {
       game_phase: completedNormally ? game.game_phase : "ended_early",
     }).eq("id", gameId);
     if (game.trivia_tuesday_event_id && completedNormally) {
-      const { data: session } = await supabase.from("sessions").select("*").eq("id",game.session_id).single();
-      const saved = session?.trivia_tuesday_pause_state || {}; const pausedAt = saved.paused_at ? new Date(saved.paused_at).getTime() : Date.now(); const pausedMs = Math.max(0,Date.now()-pausedAt);
-      const shift = (value:any) => value ? new Date(new Date(value).getTime()+pausedMs).toISOString() : null;
-      if (saved.game_mode === "rickhouse") {
-        const { data: pausedGame } = await supabase.from("rickhouse_games").select("*").eq("session_id",game.session_id).eq("status","paused").order("created_at",{ascending:false}).limit(1).maybeSingle();
-        if (pausedGame) await supabase.from("rickhouse_games").update({ status:"active", round_started_at:shift(pausedGame.round_started_at), round_ends_at:shift(pausedGame.round_ends_at), cask_strength_started_at:shift(pausedGame.cask_strength_started_at), cask_strength_ends_at:shift(pausedGame.cask_strength_ends_at) }).eq("id",pausedGame.id);
-      }
-      if (saved.game_mode === "aging_room") {
-        const { data: pausedAging } = await supabase.from("aging_room_games").select("*").eq("session_id",game.session_id).eq("status","paused").maybeSingle();
-        if (pausedAging) await supabase.from("aging_room_games").update({ status:"active", phase_started_at:shift(pausedAging.phase_started_at), updated_at:new Date().toISOString() }).eq("id",pausedAging.id);
-      }
-      if (saved.game_mode === "last_call") {
-        const { data: pausedLastCall } = await supabase.from("last_call_games").select("*").eq("session_id",game.session_id).is("completed_at",null).maybeSingle();
-        if (pausedLastCall) await supabase.from("last_call_games").update({ phase_started_at:shift(pausedLastCall.phase_started_at) }).eq("id",pausedLastCall.id);
-      }
-      const restored = { ...saved }; delete restored.paused_at;
-      if (restored.question_started_at) restored.question_started_at = shift(restored.question_started_at);
-      if (restored.question_ends_at) restored.question_ends_at = shift(restored.question_ends_at);
-      await supabase.from("sessions").update({ ...restored, trivia_tuesday_phase:"complete", trivia_tuesday_pause_state:null, trivia_tuesday_theme:null }).eq("id",game.session_id);
-      return NextResponse.json({ success:true, restoredMode:saved.game_mode || "main" });
+      const { data:leaderboard }=await supabase.from("players").select("id,display_name,score").eq("session_id",game.session_id).order("score",{ascending:false});
+      await supabase.from("session_leaderboard_exports").upsert({session_id:game.session_id,reason:"trivia_tuesday_completed",leaderboard:leaderboard||[]},{onConflict:"session_id"});
+      await supabase.from("session_controls").update({state:"ended",ended_at:new Date().toISOString(),exported_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("session_id",game.session_id);
+      await supabase.from("sessions").update({status:"ended",game_mode:"complete",question_status:"closed",show_answer:false,trivia_tuesday_phase:"complete",trivia_tuesday_pause_state:null}).eq("id",game.session_id);
+      return NextResponse.json({ success:true, ended:true });
     }
     await supabase.from("sessions").update({
       game_mode: "main", question_status: "closed", current_question_id: null,

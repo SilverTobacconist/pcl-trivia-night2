@@ -39,13 +39,10 @@ export async function POST(request: Request) {
       await supabase.from("trivia_tuesday_events").update({ started_session_id:session.id }).eq("id",data.id);
       return NextResponse.json({ event:{ ...data, started_session_id:session.id }, session, sheetName:sheet.title });
     }
-    if (body.action === "start" || body.action === "test") {
+    if (body.action === "open" || body.action === "test") {
       const isTest = body.action === "test"; const { data:event, error:eventError } = await supabase.from("trivia_tuesday_events").select("*").eq("id",body.eventId).single();
       if (eventError || !event) return NextResponse.json({ error:"Trivia Tuesday event not found." }, { status:404 });
-      if (!isTest) {
-        if (event.status === "completed") return NextResponse.json({ error:"This Trivia Tuesday has already been played." }, { status:409 });
-        if (Date.now() < new Date(event.scheduled_start_at).getTime() - 2 * 60 * 60 * 1000) return NextResponse.json({ error:"Trivia Tuesday opens two hours before its scheduled start." }, { status:409 });
-      }
+      if (!isTest && ["completed","cancelled"].includes(event.status)) return NextResponse.json({ error:"This Trivia Tuesday has already been played." }, { status:409 });
       let session: any = null;
       if (isTest) {
         const created = await supabase.from("sessions").insert({ session_code:sessionCode(), location:event.location, host_name:"Trivia Tuesday Test", created_at:new Date().toISOString(), game_mode:"main", status:"active", trivia_tuesday_event_id:event.id, trivia_tuesday_theme:event.board_theme, trivia_tuesday_phase:"seasonal", is_test:true, question_status:"lobby" }).select("*").single();
