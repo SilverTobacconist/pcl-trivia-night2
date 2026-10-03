@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (action === "start") {
       if (session?.trivia_tuesday_phase === "countdown") return NextResponse.json({ error:"Trivia Tuesday starts shortly.  No new modes can begin until its Rickhouse is complete." },{status:409});
       if (control.decision_player_id !== player.id) return NextResponse.json({ error: "Only the Decision Player starts a mode." }, { status: 403 });
-      const response = await startRickhouse(forwarded({ sessionId, roundName: "single_cask", pickerPlayerId: player.id, triviaTuesdayEventId: session?.trivia_tuesday_event_id || null }));
+      const response = await startRickhouse(forwarded({ sessionId, roundName: "single_cask", pickerPlayerId: player.id, triviaTuesdayEventId: session?.trivia_tuesday_phase === "seasonal" ? session.trivia_tuesday_event_id : null }));
       if (response.ok) await supabase.from("session_controls").update({ state: "main_active", last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
       return response;
     }
