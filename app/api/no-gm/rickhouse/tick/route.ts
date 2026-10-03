@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         const correct = (current.caskStrength || []).filter((entry: any) => normalize(entry.submitted_answer || "") === normalize(updated.cask_strength_correct_answer || "") || String(updated.cask_strength_answer_aliases || "").split("|").map(normalize).includes(normalize(entry.submitted_answer || ""))).map((entry: any) => entry.id);
         await gradeCask(forwarded({ gameId: updated.id, correctEntryIds: correct })); await wait(supabase, sessionId, 3); return NextResponse.json({ ok: true });
       }
-      if (updated?.game_phase === "cask_strength_reveal" && expired) {
+      if (updated?.game_phase === "cask_strength_reveal" && expired && !updated.trivia_tuesday_event_id) {
         const reveal = await revealCask(forwarded({ gameId: updated.id })); const data = await reveal.json();
         if (data.complete) return finalizeCask(forwarded({ gameId: updated.id }));
         await wait(supabase, sessionId, 3);

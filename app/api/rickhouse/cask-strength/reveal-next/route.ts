@@ -11,7 +11,8 @@ export async function POST(request: Request) {
     await supabase.from("rickhouse_cask_strength_entries").update({ is_revealed:true }).eq("id", next.id);
     const score = Number(next.final_score ?? next.starting_score);
     await supabase.from("rickhouse_scores").update({ score }).eq("game_id", gameId).eq("player_id", next.player_id);
-    await supabase.from("rickhouse_games").update({ cask_strength_reveal_index: Number(game.cask_strength_reveal_index||0)+1 }).eq("id", gameId);
-    return NextResponse.json({ success:true, complete: entries.filter(e=>!e.is_revealed).length === 1 });
+    const complete = entries.filter(e=>!e.is_revealed).length === 1;
+    await supabase.from("rickhouse_games").update({ cask_strength_reveal_index: Number(game.cask_strength_reveal_index||0)+1, ...(complete && game.trivia_tuesday_event_id ? { game_phase:"cask_strength_final_leaderboard" } : {}) }).eq("id", gameId);
+    return NextResponse.json({ success:true, complete });
   } catch(error:any){return NextResponse.json({error:error.message||"Unknown error."},{status:500});}
 }

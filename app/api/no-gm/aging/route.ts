@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     ]);
     if (!player || player.left_at || !control || !session) return NextResponse.json({ error: "Game player not found." }, { status: 404 });
     if (action === "start") {
+      if (session.trivia_tuesday_phase === "countdown") return NextResponse.json({ error:"Trivia Tuesday starts shortly.  No new modes can begin until its Rickhouse is complete." },{status:409});
       if (control.decision_player_id !== player.id) return NextResponse.json({ error: "Only the Decision Player starts a mode." }, { status: 403 });
       let activeGame = game;
       if (!activeGame) {

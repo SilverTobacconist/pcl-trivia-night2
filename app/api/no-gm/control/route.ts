@@ -41,6 +41,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (!isDecisionPlayer) return NextResponse.json({ error: "The current decision player chooses the next move." }, { status: 403 });
+    const { data: eventSession } = await supabase.from("sessions").select("trivia_tuesday_phase").eq("id",sessionId).single();
+    if (eventSession?.trivia_tuesday_phase === "countdown" && ["start_main", "start_keyword_trivia", "end_session"].includes(action)) return NextResponse.json({ error:"Trivia Tuesday starts shortly.  Finish the current question, then the seasonal board will begin." },{status:409});
     if (action === "pass_control") {
       const { data: target } = await supabase.from("players").select("id").eq("id", body.targetPlayerId).eq("session_id", sessionId).is("left_at", null).maybeSingle();
       if (!target) return NextResponse.json({ error: "Choose a player who is still in this game." }, { status: 400 });
@@ -73,13 +75,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (action === "start_keyword_trivia") {
-      const term = String(body.keywordTerm || "").trim(); const frequency = Number(body.keywordFrequency);
-      if (!term) return NextResponse.json({ error: "Enter the category or subcategory word to feature." }, { status: 400 });
-      if (!Number.isInteger(frequency) || frequency < 1 || frequency > 20) return NextResponse.json({ error: "Choose a frequency between every question and every 20th question." }, { status: 400 });
-      const { error } = await supabase.from("session_controls").update({ state: "main_active", keyword_trivia_term: term, keyword_trivia_frequency: frequency, main_question_count: 0, last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("session_id", sessionId);
-      if (error) throw error;
-      await supabase.from("sessions").update({ game_mode: "keyword_trivia", question_status: "ready", current_question_id: null, current_question_text: null, current_answer: null, current_answer_aliases: null, show_answer: false }).eq("id", sessionId);
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ error: "Keyword Trivia can only be started from the bartender console." }, { status: 403 });
     }
     if (action === "end_session" || action === "end") {
       const { data: session } = await supabase.from("sessions").select("question_status").eq("id", sessionId).single();

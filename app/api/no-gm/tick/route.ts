@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     ]);
     if (!player || !control || !session) return NextResponse.json({ error: "Game not found." }, { status: 404 });
     if (control.state !== "main_active") return NextResponse.json({ ok: true });
+    if (session.trivia_tuesday_phase === "countdown" && ["ready", "loading", "lobby", "closed"].includes(session.question_status || "")) return NextResponse.json({ ok:true, waitingForTriviaTuesday:true });
     const now = new Date();
     const { data: openDispute } = await supabase.from("answer_disputes").select("*").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle();
     if (openDispute) {
