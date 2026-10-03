@@ -6,7 +6,7 @@ export default function RickhousePanel({ rickhouse, playerId, isDecision, onActi
   const [answer, setAnswer] = useState("");
   const [wager, setWager] = useState("");
   const [now, setNow] = useState(Date.now());
-  const { game, pours = [], standings = [], activePour, myAnswer, myScore, myCaskEntry } = rickhouse;
+  const { game, pours = [], standings = [], activePour, myAnswer, myScore, myCaskEntry, caskEntries = [] } = rickhouse;
   const phase = game.game_phase;
   const isPicker = game.current_picker_player_id === playerId;
   const isAngel = game.angels_share_player_id === playerId;
@@ -37,9 +37,10 @@ export default function RickhousePanel({ rickhouse, playerId, isDecision, onActi
     <><h2>Cask Strength</h2><p>{game.cask_strength_subcategory}</p>{!myCaskEntry ? <p>Only positive-score players qualified for Cask Strength.</p> : <>
       {phase === "cask_strength_wager" && <><p className="event-timer">{caskSeconds ?? 0}s</p>{myCaskEntry.wager === null ? <form onSubmit={(e) => { e.preventDefault(); onAction("cask_wager", Number(wager)); }}><p>Your starting score: {myCaskEntry.starting_score}.  Wager any amount up to that score.</p><input type="number" min="0" max={myCaskEntry.starting_score} value={wager} onChange={(e) => setWager(e.target.value)} required /><button>Lock final wager</button></form> : <p className="event-locked-answer">Your wager: {myCaskEntry.wager}</p>}</>}
       {phase === "cask_strength_question" && <><p className="event-timer">{caskSeconds ?? 0}s</p><h3>{game.cask_strength_question_text}</h3>{myCaskEntry.submitted_answer === null ? <form onSubmit={(e) => { e.preventDefault(); onAction("cask_answer", answer); setAnswer(""); }}><input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your final answer" required /><button>Lock answer</button></form> : <p className="event-locked-answer">Your final answer: {myCaskEntry.submitted_answer}</p>}</>}
-      {phase === "cask_strength_reveal" && <>{!myCaskEntry.is_correct && <button onClick={() => onAction("dispute")}>Dispute my final answer</button>}<p>Final scores are being revealed.</p></>}
+      {phase === "cask_strength_reveal" && <><p><strong>Your final answer:</strong> {myCaskEntry.submitted_answer || "No answer"}</p><p className={myCaskEntry.is_correct ? "event-result-correct" : "event-result-wrong"}>{myCaskEntry.is_correct ? "Correct" : "Not counted"}</p>{!myCaskEntry.is_correct && <button onClick={() => onAction("dispute")}>Dispute my final answer</button>}<p>Final scores are being revealed.</p></>}
       {phase === "cask_strength_final_leaderboard" && <><h3>Final Rickhouse leaderboard</h3>{isDecision && <button onClick={() => onAction("cask_finalize")}>Show session points</button>}</>}
-      {phase === "cask_strength_complete" && <p>Rickhouse complete.  Session points have been awarded.</p>}
+      {phase === "cask_strength_complete" && <><h3>Game-session points transferred</h3><ol>{caskEntries.slice().sort((a:any,b:any)=>Number(b.final_score||0)-Number(a.final_score||0)).map((entry:any)=><li key={entry.id}>{entry.player_name}: +{entry.session_points_awarded || 0} points</li>)}</ol></>}
+      {phase === "cask_strength_session_leaderboard" && <><h3>Complete game-session leaderboard</h3><ol>{standings.map((score:any)=><li key={score.player_id}>{score.player_name}: {score.score}</li>)}</ol></>}
     </>}</>
   ) : null;
   return (

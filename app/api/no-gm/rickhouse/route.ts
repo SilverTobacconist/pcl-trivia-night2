@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     if (!game) return NextResponse.json({ error: "Rickhouse is not active." }, { status: 404 });
     if (action === "return_to_main") {
       if (control.decision_player_id !== player.id) return NextResponse.json({ error: "Only the Decision Player can return to ordinary trivia." }, { status: 403 });
-      if (game.game_phase !== "cask_strength_complete") return NextResponse.json({ error: "Rickhouse must be complete before returning to ordinary trivia." }, { status: 409 });
+      if (!["cask_strength_complete","cask_strength_session_leaderboard"].includes(game.game_phase)) return NextResponse.json({ error: "Rickhouse must be complete before returning to ordinary trivia." }, { status: 409 });
       return closeRickhouse(forwarded({ gameId: game.id }));
     }
     if (action === "pick") {
@@ -55,6 +55,11 @@ export async function POST(request: Request) {
     if (action === "cask_finalize") {
       if (control.decision_player_id !== player.id || game.game_phase !== "cask_strength_final_leaderboard") return NextResponse.json({ error:"Reveal the final leaderboard before awarding session points." },{status:409});
       return finalizeCask(forwarded({ gameId: game.id }));
+    }
+    if (action === "cask_show_session_leaderboard") {
+      if (control.decision_player_id !== player.id || game.game_phase !== "cask_strength_complete") return NextResponse.json({ error:"Award the game-session points first." },{status:409});
+      await supabase.from("rickhouse_games").update({ game_phase:"cask_strength_session_leaderboard" }).eq("id",game.id);
+      return NextResponse.json({ ok:true });
     }
     return NextResponse.json({ error: "Unknown Rickhouse action." }, { status: 400 });
   } catch (error: any) { return NextResponse.json({ error: error.message || "Could not update Rickhouse." }, { status: 500 }); }

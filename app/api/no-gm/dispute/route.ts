@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         if(!answer || answer.is_correct) return NextResponse.json({error:"Only an uncounted answer can be disputed."},{status:403});
         sourceType="aging_room"; sourceId=answer.id; submittedAnswer=answer.submitted_answer; questionText=game.question_text; correctAnswer=game.correct_answer;
       } else return NextResponse.json({ error:"This mode has no revealed answer to dispute." },{status:403});
-      const { error } = await supabase.from("answer_disputes").insert({ session_id:sessionId,answer_id:answerId || null,source_type:sourceType,source_id:sourceId,question_text:questionText,correct_answer:correctAnswer,submitted_answer:submittedAnswer,player_id:player.id,closes_at:new Date(Date.now()+30000).toISOString() });
+      const { error } = await supabase.from("answer_disputes").insert({ session_id:sessionId,answer_id:answerId || null,source_type:sourceType,source_id:sourceId,question_text:questionText,correct_answer:correctAnswer,submitted_answer:submittedAnswer,player_id:player.id,closes_at:new Date(Date.now()+15000).toISOString() });
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
