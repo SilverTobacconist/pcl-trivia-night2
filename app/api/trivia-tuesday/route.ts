@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       if (!isTest && ["completed","cancelled"].includes(event.status)) return NextResponse.json({ error:"This Trivia Tuesday has already been played." }, { status:409 });
       let session: any = null;
       if (isTest) {
-        const created = await supabase.from("sessions").insert({ session_code:sessionCode(), location:event.location, host_name:"Trivia Tuesday Test", created_at:new Date().toISOString(), game_mode:"main", status:"active", trivia_tuesday_event_id:event.id, trivia_tuesday_theme:event.board_theme, trivia_tuesday_phase:"seasonal", is_test:true, question_status:"lobby" }).select("*").single();
+        const created = await supabase.from("sessions").insert({ session_code:sessionCode(), location:event.location, host_name:"Trivia Tuesday Test", created_at:new Date().toISOString(), game_mode:"main", status:"active", trivia_tuesday_event_id:event.id, trivia_tuesday_theme:event.board_theme, trivia_tuesday_phase:"waiting_for_start", is_test:true, question_status:"lobby" }).select("*").single();
         if (created.error) return NextResponse.json({ error:created.error.message }, { status:500 }); session = created.data;
       } else {
         const existing = event.started_session_id ? await supabase.from("sessions").select("*").eq("id",event.started_session_id).maybeSingle() : { data:null };

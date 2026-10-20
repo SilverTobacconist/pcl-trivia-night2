@@ -8,7 +8,7 @@ export async function POST(request:Request) {
   try {
     const { supabase,user }=await requireAnonymousPlayer(request); const {sessionId}=await request.json();
     const [{data:session},{data:player}]=await Promise.all([supabase.from("sessions").select("*").eq("id",sessionId).single(),supabase.from("players").select("id").eq("session_id",sessionId).eq("auth_user_id",user.id).maybeSingle()]);
-    if(!session?.trivia_tuesday_event_id || !player || session.trivia_tuesday_phase==="seasonal" || session.game_mode==="rickhouse") return NextResponse.json({ok:true});
+    if(!session?.trivia_tuesday_event_id || !player || session.game_mode==="rickhouse") return NextResponse.json({ok:true});
     const admin=getSupabaseAdmin(); const {data:event}=await admin.from("trivia_tuesday_events").select("*").eq("id",session.trivia_tuesday_event_id).single();
     if(!event || ["completed","cancelled"].includes(event.status)) return NextResponse.json({ok:true});
     const now=Date.now(), startsAt=new Date(event.scheduled_start_at).getTime();
