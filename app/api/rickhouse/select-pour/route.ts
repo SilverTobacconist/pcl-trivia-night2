@@ -102,6 +102,8 @@ export async function POST(request: Request) {
         angels_share_wager: null,
         angels_share_result: null,
         last_pour_result: null,
+        controller_idle_started_at: null,
+        controller_idle_countdown_at: null,
       })
       .eq("id", gameId)
       .select("*")

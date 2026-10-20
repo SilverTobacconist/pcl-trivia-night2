@@ -183,6 +183,7 @@ export async function POST(request: Request) {
     await supabase
       .from("rickhouse_games")
       .update({
+        previous_picker_player_id: game.current_picker_player_id,
         current_picker_player_id: nextPickerPlayerId,
         current_pour_id: game.current_pour_id,
         game_phase: nextGamePhase,

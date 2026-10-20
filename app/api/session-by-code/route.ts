@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -26,5 +27,6 @@ export async function GET(request: Request) {
   }
 
   const { data: control } = await supabase.from("session_controls").select("decision_player_id,state").eq("session_id", session.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
-  return NextResponse.json({ session, needsController: !control, isPaused: control?.state === "timeout" });
+  const { data: triviaTuesday } = session.trivia_tuesday_event_id ? await getSupabaseAdmin().from("trivia_tuesday_events").select("event_name,scheduled_start_at,board_theme").eq("id", session.trivia_tuesday_event_id).maybeSingle() : { data: null };
+  return NextResponse.json({ session, needsController: !control, isPaused: control?.state === "timeout", triviaTuesday });
 }

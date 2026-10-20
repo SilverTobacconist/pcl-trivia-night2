@@ -45,6 +45,17 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ok:true,disputeResolved:true});
     }
+    // Board selection has no ordinary question clock.  After 30 seconds of
+    // inactivity, give a five-second warning then return selection to the
+    // immediately previous picker (where one exists).
+    if (game.game_phase === "board") {
+      const started = game.controller_idle_started_at ? new Date(game.controller_idle_started_at).getTime() : 0;
+      const countdown = game.controller_idle_countdown_at ? new Date(game.controller_idle_countdown_at).getTime() : 0;
+      if (!started) await supabase.from("rickhouse_games").update({ controller_idle_started_at:new Date().toISOString(), controller_idle_countdown_at:null }).eq("id",game.id);
+      else if (!countdown && Date.now()-started >= 30000) await supabase.from("rickhouse_games").update({ controller_idle_countdown_at:new Date().toISOString() }).eq("id",game.id);
+      else if (countdown && Date.now()-countdown >= 5000) await supabase.from("rickhouse_games").update({ current_picker_player_id:game.previous_picker_player_id || game.current_picker_player_id, controller_idle_started_at:new Date().toISOString(), controller_idle_countdown_at:null }).eq("id",game.id);
+      return NextResponse.json({ok:true});
+    }
     if (["question", "angels_question"].includes(game.game_phase) && expired) {
       const [{ data: pour }, { data: answers }] = await Promise.all([
         supabase.from("rickhouse_pours").select("*").eq("id", game.current_pour_id).single(),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requestSupabase } from "@/lib/noGmAuth";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url); const sessionId = searchParams.get("sessionId");
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   const [{ data: session }, { data: control }, { data: players }, { data: disputes }, { data: leaderboardExport }, { data: currentPlayer }] = await Promise.all([
     supabase.from("sessions").select("*").eq("id", sessionId).single(),
     supabase.from("session_controls").select("*").eq("session_id", sessionId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("players").select("id,display_name,score,left_at").eq("session_id", sessionId).order("score", { ascending: false }).order("display_name"),
+    supabase.from("players").select("id,display_name,score,left_at,trivia_tuesday_ready_at").eq("session_id", sessionId).order("score", { ascending: false }).order("display_name"),
     supabase.from("answer_disputes").select("id,answer_id,closes_at,question_text,correct_answer,submitted_answer").eq("session_id", sessionId).eq("status", "open").order("opened_at", { ascending: true }).limit(1).maybeSingle(),
     supabase.from("session_leaderboard_exports").select("*").eq("session_id", sessionId).maybeSingle(),
     authData.user ? supabase.from("players").select("id").eq("session_id", sessionId).eq("auth_user_id", authData.user.id).maybeSingle() : Promise.resolve({ data: null }),
@@ -53,5 +54,6 @@ export async function GET(request: Request) {
   const standings = (rickhouseScores || []).map((row: any) => ({ ...row, player_name: (rickhouseNames || []).find((p: any) => p.id === row.player_id)?.display_name || "Unknown" }));
   const namedCaskEntries=(caskEntries||[]).map((entry:any)=>({...entry,player_name:(caskNames||[]).find((player:any)=>player.id===entry.player_id)?.display_name||"Unknown"}));
   const rickhouse = rickhouseGame ? { game: rickhouseGame, pours: rickhousePours || [], standings, activePour, myAnswer: rickhouseAnswer || null, myScore: (rickhouseScores || []).find((row: any) => row.player_id === currentPlayer?.id)?.score || 0, caskEntries: namedCaskEntries, myCaskEntry: namedCaskEntries.find((entry: any) => entry.player_id === currentPlayer?.id) || null } : null;
-  return NextResponse.json({ session, control, players: players || [], dispute, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null, aging: agingGame ? { game: agingGame, players: agingPlayers || [], entry: agingEntry || null } : null, rickhouse }, { headers: { "Cache-Control": "no-store" } });
+  const { data: triviaTuesday } = session?.trivia_tuesday_event_id ? await getSupabaseAdmin().from("trivia_tuesday_events").select("event_name,scheduled_start_at,board_theme,status").eq("id", session.trivia_tuesday_event_id).maybeSingle() : { data: null };
+  return NextResponse.json({ session, control, players: players || [], dispute, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null, aging: agingGame ? { game: agingGame, players: agingPlayers || [], entry: agingEntry || null } : null, rickhouse, triviaTuesday }, { headers: { "Cache-Control": "no-store" } });
 }
