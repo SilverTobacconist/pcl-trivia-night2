@@ -7,7 +7,7 @@ import { anonymousAccessToken } from "@/lib/browserSupabase";
 export default function EventJoinPage() {
   const game = useSearchParams().get("game") || ""; const router = useRouter();
   const [name, setName] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [needsController, setNeedsController] = useState(false); const [isPaused, setIsPaused] = useState(false); const [decline, setDecline] = useState(false); const [triviaTuesday,setTriviaTuesday]=useState<any>(null); const [now,setNow]=useState(Date.now());
-  useEffect(() => { if (!game) return; fetch(`/api/session-by-code?sessionCode=${encodeURIComponent(game)}`).then((response) => response.json()).then((data) => { setNeedsController(Boolean(data.needsController)); setIsPaused(Boolean(data.isPaused)); setTriviaTuesday(data.triviaTuesday||null); }); }, [game]);
+  useEffect(() => { if (!game) return; (async()=>{ try { const token=await anonymousAccessToken(); const response=await fetch(`/api/session-by-code?sessionCode=${encodeURIComponent(game)}`,{headers:{Authorization:`Bearer ${token}`}}); const data=await response.json(); setNeedsController(Boolean(data.needsController)); setIsPaused(Boolean(data.isPaused)); setTriviaTuesday(data.triviaTuesday||null); if(data.existingPlayer && !data.existingPlayer.left_at) router.replace(`/event/play?sessionId=${data.session.id}&playerId=${data.existingPlayer.id}`); } catch { setError("Could not restore your saved player."); } })(); }, [game,router]);
   useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id);},[]);
   async function join(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
