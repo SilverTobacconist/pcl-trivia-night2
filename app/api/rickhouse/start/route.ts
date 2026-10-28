@@ -308,7 +308,7 @@ export async function POST(request: Request) {
     if (seasonalRows && seasonalPours.length !== 25) return NextResponse.json({ error: `The ${roundName === "single_cask" ? "Round 1" : "Round 2"} board needs all 25 question and answer fields completed.` }, { status: 400 });
 
     const roundStartedAt = new Date();
-    const roundDurationSeconds = 15 * 60;
+    const roundDurationSeconds = roundName === "double_cask" ? 20 * 60 : 15 * 60;
     const roundEndsAt = new Date(
       roundStartedAt.getTime() + roundDurationSeconds * 1000
     );

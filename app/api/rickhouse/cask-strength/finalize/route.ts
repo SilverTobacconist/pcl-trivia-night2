@@ -55,6 +55,24 @@ export async function POST(request: Request) {
       );
     }
 
+    // A Trivia Tuesday is its own completed event.  Preserve the Rickhouse
+    // placement record, but never transfer points into an ordinary session.
+    if (game.trivia_tuesday_event_id) {
+      const ranked = [...entries].sort((a,b)=>Number(b.final_score||0)-Number(a.final_score||0));
+      const ids = ranked.map((entry:any)=>entry.player_id);
+      const { data:names } = await supabase.from("players").select("id,display_name").in("id",ids);
+      const placements = ranked.map((entry:any,index:number)=>({ player_id:entry.player_id, player_name:names?.find((p:any)=>p.id===entry.player_id)?.display_name||"Unknown", place:ranked.findIndex((candidate:any)=>Number(candidate.final_score||0)===Number(entry.final_score||0))+1, game_score:Number(entry.final_score||0) }));
+      if (!game.is_test) {
+        await recordGameResult(game.session_id, game.id, "rickhouse", placements);
+        await supabase.from("trivia_tuesday_results").upsert({ event_id:game.trivia_tuesday_event_id, session_id:game.session_id, game_id:game.id, placements });
+        await supabase.from("trivia_tuesday_events").update({status:"completed",completed_game_id:game.id}).eq("id",game.trivia_tuesday_event_id);
+      }
+      await supabase.from("rickhouse_games").update({game_phase:"cask_strength_complete",status:"completed"}).eq("id",gameId);
+      await supabase.from("sessions").update({status:"ended",game_mode:"complete",question_status:"closed",show_answer:true,trivia_tuesday_phase:"complete"}).eq("id",game.session_id);
+      await supabase.from("session_controls").update({state:"ended",ended_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("session_id",game.session_id);
+      return NextResponse.json({success:true,standalone:true});
+    }
+
     let index = 0;
 
     while (index < entries.length) {

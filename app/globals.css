@@ -102,11 +102,17 @@ button.button-clicked:not(:disabled) {
  .event-display ol { max-width: 800px; margin: 2rem auto; text-align: left; font-size: clamp(1.25rem, 3vw, 2.5rem); }
  .event-display li { display: flex; justify-content: space-between; padding: .3rem 0; }
  .event-answer { color: #ffcc74; font-size: clamp(1.5rem, 3vw, 3rem); }
- .rickhouse-board { display:grid; grid-template-columns:repeat(5,minmax(110px,1fr)); gap:.45rem; overflow-x:auto; }
+ .rickhouse-swipe { color:#e2b15c; font-size:.88rem; margin:.25rem 0 .55rem; }
+ .rickhouse-board { display:grid; grid-template-columns:repeat(5, minmax(150px, 1fr)); gap:.55rem; overflow:auto; padding-bottom:.8rem; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; }
  .rickhouse-column { display:grid; gap:.35rem; text-align:center; }
- .rickhouse-column strong { min-height:3.5rem; display:grid; place-items:center; color:#f3c75f; }
+ .rickhouse-column { scroll-snap-align:start; }
+ .rickhouse-column strong { min-height:4.4rem; display:grid; place-items:center; color:#f3c75f; font-size:1.05rem; }
  .rickhouse-column button { min-height:3.25rem; }
- .rickhouse-used { opacity:.45; }
+ .rickhouse-used { opacity:.5; background:#694b1e !important; }
+ .event-warning { color:#ffd2a1; font-weight:700; }
+ .event-kicker { color:#f3c75f; font-weight:700; }
+ .trivia-champion { text-align:center; padding:1.5rem 0; }
+ .trivia-champion h2 { color:#f3c75f; font-size:clamp(2rem,8vw,3.4rem); margin:.35rem 0; }
  .trivia-theme-autumn { background: radial-gradient(circle at top, #7d341c, #20130d 62%); }
  .trivia-theme-autumn h1 { color: #f0a24a; }
  .trivia-theme-halloween { background: radial-gradient(circle at top, #45185d, #09040c 64%); }

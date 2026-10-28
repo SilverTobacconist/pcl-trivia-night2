@@ -209,7 +209,7 @@ export async function GET(request: Request) {
             }
           }
           const startedAt = new Date();
-          const questionEndsAt = new Date(startedAt.getTime() + 30000);
+          const questionEndsAt = new Date(startedAt.getTime() + 35000);
           const { data: advanced } = await supabase.from("rickhouse_games").update({
             game_phase: "cask_strength_question",
             cask_strength_started_at: startedAt.toISOString(),
@@ -224,7 +224,7 @@ export async function GET(request: Request) {
             question_status: "active",
             question_started_at: startedAt.toISOString(),
             question_ends_at: questionEndsAt.toISOString(),
-            question_duration_seconds: 30,
+            question_duration_seconds: 35,
             show_answer: false,
           }).eq("id", currentGame.session_id);
           if (advanced) currentGame = advanced;

@@ -21,11 +21,11 @@ export async function POST(request: Request) {
         if (!game) return NextResponse.json({ error:"Rickhouse is not active." },{status:404});
         if (["pour_reveal","angels_reveal"].includes(game.game_phase)) {
           const { data: pour } = await supabase.from("rickhouse_pours").select("*").eq("id",game.current_pour_id).single(); const { data: answer } = await supabase.from("rickhouse_answers").select("id,is_correct,submitted_answer").eq("pour_id",game.current_pour_id).eq("player_id",player.id).maybeSingle();
-          if (!pour || !answer || answer.is_correct) return NextResponse.json({ error:"Only an uncounted answer can be disputed." },{status:403});
+          if (!pour || !answer || answer.is_correct || !String(answer.submitted_answer||"").trim()) return NextResponse.json({ error:"Only an incorrect submitted answer can be disputed." },{status:403});
           sourceType="rickhouse"; sourceId=answer.id; submittedAnswer=answer.submitted_answer; questionText=pour.question_text; correctAnswer=pour.correct_answer;
         } else if (game.game_phase === "cask_strength_reveal") {
           const { data: entry } = await supabase.from("rickhouse_cask_strength_entries").select("id,is_correct,submitted_answer").eq("game_id",game.id).eq("player_id",player.id).maybeSingle();
-          if (!entry || entry.is_correct) return NextResponse.json({ error:"Only an uncounted answer can be disputed." },{status:403});
+          if (!entry || entry.is_correct || !String(entry.submitted_answer||"").trim()) return NextResponse.json({ error:"Only an incorrect submitted answer can be disputed." },{status:403});
           sourceType="cask_strength"; sourceId=entry.id; submittedAnswer=entry.submitted_answer || ""; questionText=game.cask_strength_question_text; correctAnswer=game.cask_strength_correct_answer;
         } else return NextResponse.json({ error:"Disputes open after the answer is revealed." },{status:403});
       } else if (session.game_mode === "aging_room") {
@@ -35,7 +35,8 @@ export async function POST(request: Request) {
         if(!answer || answer.is_correct) return NextResponse.json({error:"Only an uncounted answer can be disputed."},{status:403});
         sourceType="aging_room"; sourceId=answer.id; submittedAnswer=answer.submitted_answer; questionText=game.question_text; correctAnswer=game.correct_answer;
       } else return NextResponse.json({ error:"This mode has no revealed answer to dispute." },{status:403});
-      const { error } = await supabase.from("answer_disputes").insert({ session_id:sessionId,answer_id:answerId || null,source_type:sourceType,source_id:sourceId,question_text:questionText,correct_answer:correctAnswer,submitted_answer:submittedAnswer,player_id:player.id,closes_at:new Date(Date.now()+15000).toISOString() });
+      const { count } = await supabase.from("answer_disputes").select("id",{count:"exact",head:true}).eq("session_id",sessionId).eq("status","open");
+      const { error } = await supabase.from("answer_disputes").insert({ session_id:sessionId,answer_id:answerId || null,source_type:sourceType,source_id:sourceId,question_text:questionText,correct_answer:correctAnswer,submitted_answer:submittedAnswer,player_id:player.id,closes_at:new Date(Date.now()+15000+(Number(count||0)*5000)).toISOString() });
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }

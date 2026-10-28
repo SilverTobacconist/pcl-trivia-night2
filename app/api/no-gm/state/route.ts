@@ -30,6 +30,9 @@ export async function GET(request: Request) {
     correctAnswer: disputes.correct_answer || session?.current_answer || "",
     submittedAnswer: disputes.submitted_answer || disputedAnswer?.submitted_answer || "",
   } : null;
+  const { data: resolvedDispute } = currentPlayer ? await supabase.from("answer_disputes").select("id,player_id,status,resolved_at").eq("session_id", sessionId).eq("player_id", currentPlayer.id).in("source_type", ["rickhouse", "cask_strength"]).in("status", ["approved", "rejected"]).order("resolved_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
+  const { data: resolvedVotes } = resolvedDispute ? await supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id", resolvedDispute.id) : { data: [] };
+  const disputeResult = resolvedDispute ? { approved: resolvedDispute.status === "approved", resolvedAt: resolvedDispute.resolved_at, votesFor: (resolvedVotes || []).filter((vote: any) => vote.vote_yes).length, votesTotal: (resolvedVotes || []).length } : null;
   const { data: lastCallGame } = session?.game_mode === "last_call"
     ? await supabase.from("last_call_games").select("*").eq("session_id", sessionId).is("completed_at", null).maybeSingle()
     : { data: null };
@@ -42,7 +45,7 @@ export async function GET(request: Request) {
   const { data: agingGame } = session?.game_mode === "aging_room" ? await supabase.from("aging_room_games").select("*").eq("session_id", sessionId).in("status", ["active", "completed"]).maybeSingle() : { data: null };
   const { data: agingPlayers } = agingGame ? await supabase.from("aging_room_players").select("*").eq("game_id", agingGame.id).order("final_place", { ascending: true, nullsFirst: true }) : { data: [] };
   const { data: agingEntry } = agingGame && currentPlayer ? await supabase.from("aging_room_answers").select("*").eq("game_id", agingGame.id).eq("player_id", currentPlayer.id).eq("question_number", agingGame.question_number).eq("attempt_number", agingGame.attempt_number).maybeSingle() : { data: null };
-  const { data: rickhouseGame } = session?.game_mode === "rickhouse" ? await supabase.from("rickhouse_games").select("*").eq("session_id", sessionId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
+  const { data: rickhouseGame } = (session?.game_mode === "rickhouse" || session?.trivia_tuesday_event_id) ? await supabase.from("rickhouse_games").select("*").eq("session_id", sessionId).in("status", session?.trivia_tuesday_event_id ? ["active","completed"] : ["active"]).order("created_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
   const { data: rickhousePours } = rickhouseGame ? await supabase.from("rickhouse_pours").select("*").eq("game_id", rickhouseGame.id).order("column_index").order("row_index") : { data: [] };
   const { data: rickhouseScores } = rickhouseGame ? await supabase.from("rickhouse_scores").select("*").eq("game_id", rickhouseGame.id).order("score", { ascending: false }) : { data: [] };
   const rickhousePlayerIds = (rickhouseScores || []).map((row: any) => row.player_id);
@@ -55,5 +58,5 @@ export async function GET(request: Request) {
   const namedCaskEntries=(caskEntries||[]).map((entry:any)=>({...entry,player_name:(caskNames||[]).find((player:any)=>player.id===entry.player_id)?.display_name||"Unknown"}));
   const rickhouse = rickhouseGame ? { game: rickhouseGame, pours: rickhousePours || [], standings, activePour, myAnswer: rickhouseAnswer || null, myScore: (rickhouseScores || []).find((row: any) => row.player_id === currentPlayer?.id)?.score || 0, caskEntries: namedCaskEntries, myCaskEntry: namedCaskEntries.find((entry: any) => entry.player_id === currentPlayer?.id) || null } : null;
   const { data: triviaTuesday } = session?.trivia_tuesday_event_id ? await getSupabaseAdmin().from("trivia_tuesday_events").select("event_name,scheduled_start_at,board_theme,status").eq("id", session.trivia_tuesday_event_id).maybeSingle() : { data: null };
-  return NextResponse.json({ session, control, players: players || [], dispute, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null, aging: agingGame ? { game: agingGame, players: agingPlayers || [], entry: agingEntry || null } : null, rickhouse, triviaTuesday }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ session, control, players: players || [], dispute, disputeResult, leaderboardExport: leaderboardExport || null, myAnswer: myAnswer || null, lastCall: lastCallGame ? { game: lastCallGame, entries: lastCallEntries || [], entry: lastCallEntry } : null, aging: agingGame ? { game: agingGame, players: agingPlayers || [], entry: agingEntry || null } : null, rickhouse, triviaTuesday }, { headers: { "Cache-Control": "no-store" } });
 }

@@ -6,15 +6,6 @@ export async function POST(request: Request) {
     const { data: game } = await supabase.from("rickhouse_games").select("*").eq("id", gameId).single();
     const { data: entries } = await supabase.from("rickhouse_cask_strength_entries").select("*").eq("game_id", gameId).order("reveal_order", { ascending: true });
     if (!game || !entries) return NextResponse.json({ error:"Game not found."},{status:404});
-    if (game.trivia_tuesday_event_id) {
-      for (const entry of entries) {
-        const score=Number(entry.final_score ?? entry.starting_score);
-        await supabase.from("rickhouse_cask_strength_entries").update({is_revealed:true}).eq("id",entry.id);
-        await supabase.from("rickhouse_scores").update({score}).eq("game_id",gameId).eq("player_id",entry.player_id);
-      }
-      await supabase.from("rickhouse_games").update({game_phase:"cask_strength_final_leaderboard",cask_strength_reveal_index:entries.length}).eq("id",gameId);
-      return NextResponse.json({success:true,complete:true});
-    }
     const next = entries.find(e=>!e.is_revealed);
     if (!next) return NextResponse.json({ success:true, complete:true });
     await supabase.from("rickhouse_cask_strength_entries").update({ is_revealed:true }).eq("id", next.id);
@@ -22,6 +13,7 @@ export async function POST(request: Request) {
     await supabase.from("rickhouse_scores").update({ score }).eq("game_id", gameId).eq("player_id", next.player_id);
     const complete = entries.filter(e=>!e.is_revealed).length === 1;
     await supabase.from("rickhouse_games").update({ cask_strength_reveal_index: Number(game.cask_strength_reveal_index||0)+1, ...(complete && game.trivia_tuesday_event_id ? { game_phase:"cask_strength_final_leaderboard" } : {}) }).eq("id", gameId);
+    await supabase.from("sessions").update({question_ends_at:new Date(Date.now()+3000).toISOString(),question_duration_seconds:3}).eq("id",game.session_id);
     return NextResponse.json({ success:true, complete });
   } catch(error:any){return NextResponse.json({error:error.message||"Unknown error."},{status:500});}
 }

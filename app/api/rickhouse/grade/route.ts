@@ -87,7 +87,9 @@ export async function POST(request: Request) {
 
     for (const answer of eligibleAnswers) {
       const isCorrect = correctAnswerIds.includes(answer.id);
-      const pointsAwarded = isCorrect ? pointValue : -pointValue;
+      // Trivia Tuesday is a standalone, no-penalty board: ordinary pours
+      // award points for correct answers, while Angel's Share remains a wager.
+      const pointsAwarded = isCorrect ? pointValue : (!isAngelsShare && game.trivia_tuesday_event_id ? 0 : -pointValue);
 
       await supabase
         .from("rickhouse_answers")

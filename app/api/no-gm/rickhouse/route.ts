@@ -48,12 +48,18 @@ export async function POST(request: Request) {
     }
     if (action === "cask_wager") return submitCaskWager(forwarded({ gameId: game.id, playerId: player.id, wager: value }));
     if (action === "cask_answer") return submitCaskAnswer(forwarded({ gameId: game.id, playerId: player.id, answer: String(value || "").trim() }));
+    if (action === "cask_vote") {
+      if (game.game_phase !== "cask_strength_vote" || !["Easy","Medium","Hard","Extra Hard"].includes(String(value))) return NextResponse.json({ error:"Choose a final-question difficulty." },{status:400});
+      const { error } = await supabase.from("rickhouse_cask_strength_votes").upsert({ game_id:game.id, player_id:player.id, difficulty:String(value) },{onConflict:"game_id,player_id"});
+      if (error) return NextResponse.json({ error:error.message },{status:500});
+      return NextResponse.json({ok:true});
+    }
     if (action === "cask_reveal_next") {
       if (control.decision_player_id !== player.id || game.game_phase !== "cask_strength_reveal") return NextResponse.json({ error:"Only the Decision Player may advance the final reveal." },{status:403});
       return revealCask(forwarded({ gameId: game.id }));
     }
     if (action === "cask_finalize") {
-      if (control.decision_player_id !== player.id || game.game_phase !== "cask_strength_final_leaderboard") return NextResponse.json({ error:"Reveal the final leaderboard before awarding session points." },{status:409});
+      if (control.decision_player_id !== player.id || game.game_phase !== "cask_strength_final_leaderboard") return NextResponse.json({ error:"Reveal the final leaderboard before finishing Trivia Tuesday." },{status:409});
       return finalizeCask(forwarded({ gameId: game.id }));
     }
     if (action === "cask_show_session_leaderboard") {

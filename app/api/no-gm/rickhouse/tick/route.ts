@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id",dispute.id),
         supabase.from("answer_dispute_votes").select("vote_yes").eq("dispute_id",dispute.id).eq("player_id",control.decision_player_id).maybeSingle(),
       ]);
-      const yes=(votes||[]).filter((vote:any)=>vote.vote_yes).length, no=(votes||[]).length-yes; const approved=yes>no || (yes===no && controlVote?.vote_yes===true);
+      const yes=(votes||[]).filter((vote:any)=>vote.vote_yes).length, no=(votes||[]).length-yes; const approved=yes>=no;
       const { data:claimed } = await supabase.from("answer_disputes").update({ status:approved?"approved":"rejected",resolved_at:new Date().toISOString() }).eq("id",dispute.id).eq("status","open").select("id").maybeSingle();
       if (claimed && approved && dispute.source_type === "rickhouse") {
         const [{ data:answer }, { data:pour }] = await Promise.all([supabase.from("rickhouse_answers").select("player_id,is_correct,points_awarded").eq("id",dispute.source_id).single(),supabase.from("rickhouse_pours").select("point_value").eq("id",game.current_pour_id).single()]);
@@ -62,6 +62,13 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ok:true});
     }
+    if (game.game_phase === "angels_wager" && expired) {
+      const { data:pour } = await supabase.from("rickhouse_pours").select("*").eq("id",game.current_pour_id).single();
+      const startedAt = new Date(); const endsAt = new Date(startedAt.getTime()+30000);
+      await supabase.from("rickhouse_games").update({angels_share_wager:0,game_phase:"angels_question"}).eq("id",game.id);
+      await supabase.from("sessions").update({current_question_id:pour?.question_id,current_question_text:pour?.question_text,current_answer:pour?.correct_answer,current_answer_aliases:pour?.answer_aliases||"",question_status:"active",question_started_at:startedAt.toISOString(),question_ends_at:endsAt.toISOString(),question_duration_seconds:30}).eq("id",sessionId);
+      return NextResponse.json({ok:true,defaultWager:true});
+    }
     if (["question", "angels_question"].includes(game.game_phase) && expired) {
       const [{ data: pour }, { data: answers }] = await Promise.all([
         supabase.from("rickhouse_pours").select("*").eq("id", game.current_pour_id).single(),
@@ -78,6 +85,7 @@ export async function POST(request: Request) {
       if (game.round_name === "single_cask") return startRickhouse(forwarded({ sessionId, roundName: "double_cask", pickerPlayerId: game.proposed_next_picker_player_id }));
       return startCask(forwarded({ gameId: game.id }));
     }
+    if (game.game_phase === "cask_strength_vote") return startCask(forwarded({ gameId:game.id }));
     if (game.game_phase.startsWith("cask_strength")) {
       const currentResponse = await currentRickhouse(new Request(`http://internal?sessionId=${sessionId}`));
       const current = await currentResponse.json(); const updated = current.game;
@@ -85,11 +93,11 @@ export async function POST(request: Request) {
         const correct = (current.caskStrength || []).filter((entry: any) => normalize(entry.submitted_answer || "") === normalize(updated.cask_strength_correct_answer || "") || String(updated.cask_strength_answer_aliases || "").split("|").map(normalize).includes(normalize(entry.submitted_answer || ""))).map((entry: any) => entry.id);
         await gradeCask(forwarded({ gameId: updated.id, correctEntryIds: correct })); await wait(supabase, sessionId, 3); return NextResponse.json({ ok: true });
       }
-      if (updated?.game_phase === "cask_strength_reveal" && expired && !updated.trivia_tuesday_event_id) {
-        const reveal = await revealCask(forwarded({ gameId: updated.id })); const data = await reveal.json();
-        if (data.complete) return finalizeCask(forwarded({ gameId: updated.id }));
+      if (updated?.game_phase === "cask_strength_reveal" && expired) {
+        await revealCask(forwarded({ gameId: updated.id }));
         await wait(supabase, sessionId, 3);
       }
+      if (updated?.game_phase === "cask_strength_final_leaderboard" && updated.trivia_tuesday_event_id && expired) return finalizeCask(forwarded({ gameId: updated.id }));
     }
     return NextResponse.json({ ok: true });
   } catch (error: any) { return NextResponse.json({ error: error.message || "Could not advance Rickhouse." }, { status: 500 }); }
